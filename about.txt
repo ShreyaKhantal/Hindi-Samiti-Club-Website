@@ -1,0 +1,61 @@
+we have to make hindi samiti website 
+which is a cultural club of our college 
+the website should look cultural and beautiful 
+with good effects 
+as it is a club website it should have the best user side UI 
+
+techstack to be used is react, python and SQLAlchemy
+
+we want two user sides
+admin and any generic user
+
+ADMIN
+admin will have a login
+
+home:
+add/delete images which are visible in the home page
+intro should be editable
+
+event:
+event specific:
+create, edit, delete event
+create dynamic registration forms for events which will take text and image input(to show QR)
+add cover image for the event which can be updated or removed too
+participant specific:
+all participants will be visible and they need to be verified by the screenshot they upload which will be visible to the admin
+an excel download button available to download everything about all participants 
+
+team: 
+add members, add or update their image, add or not description for the members
+
+
+USER
+it will show section on top bar 
+home, about, events, team, join us, contact
+the website structure should be such that the home page is scrollable until contact us at the bottom
+also from the head bar we can go to any section
+
+home
+it will have beautiful logo, images that are moving slowly, intro
+
+about
+founded by and motive of club
+
+events 
+where it will have a show more button 
+which will lead to a new page displaying all events with names, dates and a image as a cover
+clicking on any one will lead to a separate page for that particular event having description, forms
+if the event is over then it will show few images, total participants.
+
+registration form:
+it will be inside the specific event page,
+user will first enter the email id which will then check in the database 
+and if it is present the user will see current registraion status that is verified, pending or rejected
+if the email id is not in the database it will drop down to the registration form dynamically
+
+team 
+which will have separate sections for faculty coordinator, president and core team, developers 
+
+contact
+at the end of every page there will be contact at section with all social media handles, email
+

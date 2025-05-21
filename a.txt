@@ -1,0 +1,34 @@
+hindi-samiti/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py           # Create app, configure DB
+│   │   ├── routes.py             # All routes (admin + user)
+│   │   ├── models.py             # All SQLAlchemy models
+│   │   ├── utils.py              # File uploads, Excel export, form helpers
+│   │   ├── config.py             # App and DB configs
+│   │   └── static/               # Uploaded images, screenshots, QR codes
+│   ├── database.py               # SQLAlchemy setup
+│   ├── run.py                    # Entry point: from app import app
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── public/
+│   │   └── index.html
+│   ├── src/
+│   │   ├── assets/               # Logo, images, static assets
+│   │   ├── components/           # Navbar, Footer, Cards, etc.
+│   │   ├── sections/             # Home, About, Events, Team, Contact (scrollable)
+│   │   ├── pages/
+│   │   │   ├── Landing.jsx       # Scrollable user homepage
+│   │   │   ├── Events.jsx        # List of all events
+│   │   │   ├── EventDetails.jsx  # Detailed event + registration
+│   │   │   ├── AdminLogin.jsx 
+│   │   │   └── Admin.jsx         # Admin dashboard (login + manage)
+│   │   ├── utils/                # API calls, auth helpers
+│   │   ├── App.jsx
+│   │   └── main.jsx
+│   ├── vite.config.js
+│   └── package.json
+│
+├── README.md
+└── .gitignore
