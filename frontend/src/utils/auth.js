@@ -6,11 +6,12 @@ export const login = async (username, password) => {
     // Call the login API endpoint
     const response = await apiLogin({ username, password });
     
-    // Store token in localStorage
-    if (response.token) {
-      localStorage.setItem('authToken', response.token);
+    // Store token in localStorage - Updated to match backend response
+    if (response.success && response.access_token) {
+      localStorage.setItem('authToken', response.access_token);
       localStorage.setItem('authUser', JSON.stringify({
-        username: response.username
+        id: response.admin.id,
+        username: response.admin.username
       }));
       return true;
     }

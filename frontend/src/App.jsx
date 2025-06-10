@@ -8,7 +8,7 @@ import Events from './pages/Events';
 import EventDetails from './pages/EventDetails';
 import AdminLogin from './pages/AdminLogin';
 import Admin from './pages/Admin';
-
+import './index.css'; // Import global styles
 // Protected route component
 const ProtectedRoute = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = React.useState(null);
