@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import EventCard from '../components/EventCard';
-import { fetchEvents } from '../utils/api';
+import { fetchPublicEvents } from '../utils/api';
 
 const Events = () => {
   const [events, setEvents] = useState([]);
@@ -14,7 +14,8 @@ const Events = () => {
   useEffect(() => {
     const getEvents = async () => {
       try {
-        const data = await fetchEvents();
+        const data = await fetchPublicEvents();
+        console.log('Events data:', data); // Debug log
         setEvents(data);
         setLoading(false);
       } catch (error) {
@@ -30,13 +31,30 @@ const Events = () => {
     navigate(`/events/${eventId}`);
   };
 
+  // Helper function to check if event is currently active
+  const isEventCurrentlyActive = (event) => {
+    if (!event.is_active) return false;
+    
+    const today = new Date();
+    const eventDate = new Date(event.date);
+    
+    // Reset time to compare only dates
+    today.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+    
+    return eventDate >= today;
+  };
+
   const filteredEvents = events.filter(event => {
     if (filter === 'all') return true;
-    const eventDate = new Date(event.date);
-    const today = new Date();
-    return filter === 'active' ? 
-      eventDate >= today && event.is_active : 
-      eventDate < today || !event.is_active;
+    
+    if (filter === 'active') {
+      return isEventCurrentlyActive(event);
+    } else if (filter === 'past') {
+      return !isEventCurrentlyActive(event);
+    }
+    
+    return true;
   });
 
   return (

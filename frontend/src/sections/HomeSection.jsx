@@ -1,15 +1,124 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ImageCarousel from '../components/ImageCarousal.jsx';
+import { fetchPublicImages, fetchPublicIntro } from '../utils/api.js';
 
-const HomeSection = ({ images, introText }) => {
+const HomeSection = () => {
+  const [images, setImages] = useState([]);
+  const [introText, setIntroText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
   // Default intro text if none is provided
   const defaultIntro = "हिंदी समिति is the premier Hindi language and cultural club dedicated to promoting and celebrating the rich heritage of Indian culture through literature, art, and cultural events. Join us in our mission to foster appreciation for Hindi language and Indian traditions.";
-  
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch both intro and images concurrently
+        const [introResponse, imagesResponse] = await Promise.all([
+          fetchPublicIntro().catch(err => {
+            console.warn('Failed to fetch intro:', err);
+            return { text: '' };
+          }),
+          fetchPublicImages().catch(err => {
+            console.warn('Failed to fetch images:', err);
+            return [];
+          })
+        ]);
+        
+        // DEBUG: Log the API responses
+        console.log('🔍 Intro Response:', introResponse);
+        console.log('🔍 Images Response:', imagesResponse);
+        
+        // Set intro text
+        if (introResponse && introResponse.text) {
+          setIntroText(introResponse.text);
+        } else {
+          setIntroText(defaultIntro);
+        }
+        
+        // Transform images data for ImageCarousel component
+        if (imagesResponse && Array.isArray(imagesResponse) && imagesResponse.length > 0) {
+          const transformedImages = imagesResponse.map(img => {
+            // Get the API base URL from your api.js configuration
+            // Assuming your Flask backend is running on port 5000
+            const API_BASE_URL = 'http://localhost:5000'; // Adjust this to match your Flask server
+            
+            // Convert relative URL to full backend URL
+            let fullUrl;
+            if (img.url.startsWith('http')) {
+              fullUrl = img.url;
+            } else {
+              // Remove leading slash if present and add API base URL
+              const cleanUrl = img.url.startsWith('/') ? img.url.substring(1) : img.url;
+              fullUrl = `${API_BASE_URL}/${cleanUrl}`;
+            }
+            
+            console.log('🖼️ Transforming image:', {
+              original: img.url,
+              transformed: fullUrl,
+              caption: img.caption
+            });
+            
+            return {
+              url: fullUrl,
+              caption: img.caption || 'Hindi Samiti Event'
+            };
+          });
+          
+          console.log('✅ Final transformed images:', transformedImages);
+          setImages(transformedImages);
+        } else {
+          console.log('⚠️ No images from API, using defaults');
+          setImages([]);
+        }
+        
+      } catch (err) {
+        console.error('❌ Error loading homepage data:', err);
+        setError('Failed to load homepage content');
+        // Use defaults on error
+        setIntroText(defaultIntro);
+        setImages([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // DEBUG: Log current state
+  console.log('🏠 HomeSection State:', {
+    loading,
+    error,
+    introText: introText.substring(0, 50) + '...',
+    imagesCount: images.length,
+    images: images.map(img => ({ url: img.url, caption: img.caption }))
+  });
+
+  if (loading) {
+    return (
+      <section id="home" className="relative min-h-screen flex items-center justify-center bg-gradient-to-r from-orange-900 to-red-900">
+        <div className="text-center text-white">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-300 mx-auto mb-4"></div>
+          <p className="text-xl">Loading...</p>
+        </div>
+      </section>
+    );
+  }
+
   const displayIntro = introText || defaultIntro;
 
   return (
     <section id="home" className="relative min-h-screen">
+      {/* DEBUG: Show current image count */}
+      <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-2 rounded z-50">
+        Images: {images.length} | Intro: {introText ? 'Custom' : 'Default'}
+      </div>
+      
       {/* Background carousel */}
       <ImageCarousel images={images} />
       
@@ -55,6 +164,13 @@ const HomeSection = ({ images, introText }) => {
           </motion.div>
         </motion.div>
       </div>
+      
+      {/* Error message (if any) */}
+      {error && (
+        <div className="absolute top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md z-50">
+          {error}
+        </div>
+      )}
       
       {/* Scroll indicator */}
       <motion.div 

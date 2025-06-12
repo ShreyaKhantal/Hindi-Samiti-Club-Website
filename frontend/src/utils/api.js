@@ -1,40 +1,130 @@
 import axios from 'axios';
 
-// Create axios instance with base URL
+// Configuration - Update these URLs to match your backend
+const API_BASE_URL = 'http://localhost:5000'; // Change this to your Flask backend URL
+const API_ENDPOINT = '/api';
+
+// Axios instance
 const api = axios.create({
-  baseURL: '/api', // Assuming API is served at /api
+  baseURL: `${API_BASE_URL}${API_ENDPOINT}`,
   headers: {
     'Content-Type': 'application/json'
   }
 });
 
-// Add authentication token to each request if available
+// Automatically attach token to every request
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('authToken');
+  const token = localStorage.getItem('authToken'); // Must match saved key
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Home Content API
-export const fetchIntro = async () => {
+// Response interceptor to handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid, remove from localStorage
+      localStorage.removeItem('authToken');
+      // Optionally redirect to login page
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ===================== PUBLIC APIs (No Authentication Required) =====================
+
+// Public Intro
+export const fetchPublicIntro = async () => {
   const response = await api.get('/intro');
   return response.data;
 };
 
-export const updateIntro = async (introData) => {
-  const response = await api.put('/intro/1', introData);
-  return response.data;
-};
-
-export const fetchImages = async () => {
+// Public Images
+export const fetchPublicImages = async () => {
   const response = await api.get('/images');
   return response.data;
 };
 
+// Public Team Members
+export const fetchPublicTeamMembers = async () => {
+  const response = await api.get('/team-members');
+  return response.data;
+};
+
+// Public Events
+export const fetchPublicEvents = async (includeFormFields = false) => {
+  const response = await api.get('/events', {
+    params: { include_form_fields: includeFormFields }
+  });
+  return response.data;
+};
+
+// Public Event Details
+export const fetchPublicEventDetails = async (eventId) => {
+  const response = await api.get(`/events/${eventId}`);
+  return response.data;
+};
+
+// ===================== AUTH APIs =====================
+
+export const login = async (credentials) => {
+  try {
+    const response = await api.post('/auth/login', credentials);
+
+    // Check if login was successful and token exists
+    if (response.data?.success && response.data?.access_token) {
+      localStorage.setItem('authToken', response.data.access_token);
+      return response.data;
+    } else {
+      throw new Error(response.data?.message || 'Login failed');
+    }
+  } catch (error) {
+    // Handle different error scenarios
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    }
+    throw new Error('Login failed. Please try again.');
+  }
+};
+
+// Verify Token
+export const verifyToken = async () => {
+  const response = await api.get('/admin/verify-token');
+  return response.data;
+};
+
+// Logout (client-side only since there's no server logout endpoint)
+export const logout = () => {
+  localStorage.removeItem('authToken');
+  window.location.href = '/login';
+};
+
+// ===================== ADMIN HOME CONTENT APIs =====================
+
+// Intro
+export const fetchIntro = async () => {
+  const response = await api.get('/admin/intro');
+  return response.data;
+};
+
+export const updateIntro = async (introData) => {
+  const response = await api.put('/admin/intro', introData);
+  return response.data;
+};
+
+// Images
+export const fetchImages = async () => {
+  const response = await api.get('/admin/images');
+  return response.data;
+};
+
 export const uploadImage = async (formData) => {
-  const response = await api.post('/images', formData, {
+  // For file uploads, we need to override the default Content-Type
+  const response = await api.post('/admin/images', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
@@ -43,114 +133,126 @@ export const uploadImage = async (formData) => {
 };
 
 export const deleteImage = async (imageId) => {
-  const response = await api.delete(`/images/${imageId}`);
+  const response = await api.delete(`/admin/images/${imageId}`);
   return response.data;
 };
 
-// Events API
-export const fetchEvents = async (includeFormFields = true) => {
-  const response = await api.get('/events', {
-    params: { include_form_fields: includeFormFields }
-  });
-  return response.data;
-};
+// ===================== ADMIN EVENTS APIs =====================
 
-export const fetchEvent = async (eventId) => {
-  const response = await api.get(`/events/${eventId}`);
+export const fetchEvents = async () => {
+  const response = await api.get('/admin/events');
   return response.data;
 };
 
 export const createEvent = async (eventData) => {
-  const response = await api.post('/events', eventData);
+  const response = await api.post('/admin/events', eventData);
   return response.data;
 };
 
 export const updateEvent = async (eventId, eventData) => {
-  const response = await api.put(`/events/${eventId}`, eventData);
+  const response = await api.put(`/admin/events/${eventId}`, eventData);
   return response.data;
 };
 
 export const deleteEvent = async (eventId) => {
-  const response = await api.delete(`/events/${eventId}`);
+  const response = await api.delete(`/admin/events/${eventId}`);
   return response.data;
 };
 
-// Registrations API
+// ===================== ADMIN REGISTRATION APIs =====================
+
 export const fetchRegistrations = async (eventId) => {
-  const response = await api.get(`/events/${eventId}/registrations`);
-  return response.data;
-};
-
-export const checkRegistration = async (eventId, email) => {
-  try {
-    const response = await api.get(`/events/${eventId}/check-registration`, {
-      params: { email }
-    });
-    return response.data;
-  } catch (error) {
-    if (error.response && error.response.status === 404) {
-      return null; // Not registered
-    }
-    throw error;
-  }
-};
-
-export const createRegistration = async (eventId, registrationData) => {
-  const response = await api.post(`/events/${eventId}/registrations`, registrationData);
+  const response = await api.get(`/admin/registrations/${eventId}`);
   return response.data;
 };
 
 export const updateRegistrationStatus = async (registrationId, status) => {
-  const response = await api.patch(`/registrations/${registrationId}`, { status });
+  const response = await api.put(`/admin/registrations/${registrationId}/status`, { status });
   return response.data;
 };
 
 export const downloadRegistrationsExcel = async (eventId) => {
-  const response = await api.get(`/events/${eventId}/registrations/excel`, {
-    responseType: 'blob'
-  });
-  
-  // Create a blob link to download
-  const url = window.URL.createObjectURL(new Blob([response.data]));
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `registrations-event-${eventId}.xlsx`);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  try {
+    const response = await api.get(`/admin/registrations/${eventId}/download`, {
+      responseType: 'blob'
+    });
+
+    // Create blob URL and trigger download
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Try to get filename from response headers, fallback to default
+    const contentDisposition = response.headers['content-disposition'];
+    let filename = `registrations-event-${eventId}.xlsx`;
+    
+    if (contentDisposition) {
+      const matches = /filename="([^"]*)"/.exec(contentDisposition);
+      if (matches != null && matches[1]) {
+        filename = matches[1];
+      }
+    }
+    
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    
+    return { success: true, message: 'Download started' };
+  } catch (error) {
+    console.error('Download error:', error);
+    throw error;
+  }
 };
 
-// Team API
+// ===================== ADMIN TEAM APIs =====================
+
 export const fetchTeamMembers = async () => {
-  const response = await api.get('/team-members');
+  const response = await api.get('/admin/team');
   return response.data;
 };
 
 export const createTeamMember = async (memberData) => {
-  const response = await api.post('/team-members', memberData);
+  const response = await api.post('/admin/team', memberData);
   return response.data;
 };
 
 export const updateTeamMember = async (memberId, memberData) => {
-  const response = await api.put(`/team-members/${memberId}`, memberData);
+  const response = await api.put(`/admin/team/${memberId}`, memberData);
   return response.data;
 };
 
 export const deleteTeamMember = async (memberId) => {
-  const response = await api.delete(`/team-members/${memberId}`);
+  const response = await api.delete(`/admin/team/${memberId}`);
   return response.data;
 };
 
-// Contact API
-export const fetchContactInfo = async () => {
-  const response = await api.get('/contact-info');
-  return response.data;
+// ===================== UTILITY FUNCTIONS =====================
+
+// Check if user is authenticated
+export const isAuthenticated = () => {
+  return localStorage.getItem('authToken') !== null;
 };
 
-// Authentication API
-export const login = async (credentials) => {
-  const response = await api.post('/auth/login', credentials);
-  return response.data;
+// Get current auth token
+export const getAuthToken = () => {
+  return localStorage.getItem('authToken');
+};
+
+// Set auth token manually (useful for testing or external auth flows)
+export const setAuthToken = (token) => {
+  localStorage.setAuthToken('authToken', token);
+};
+
+// Clear auth token manually
+export const clearAuthToken = () => {
+  localStorage.removeItem('authToken');
+};
+
+// Get API base URL (useful for constructing image URLs)
+export const getApiBaseUrl = () => {
+  return API_BASE_URL;
 };
 
 export default api;

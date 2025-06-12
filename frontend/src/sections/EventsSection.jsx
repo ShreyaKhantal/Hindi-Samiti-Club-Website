@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { FaArrowRight } from 'react-icons/fa';
 import EventCard from '../components/EventCard';
-import api from '../utils/api';
+import { fetchPublicEvents } from '../utils/api'; // Use public API
 
 const EventsSection = () => {
   const [events, setEvents] = useState([]);
@@ -13,8 +13,9 @@ const EventsSection = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await api.get('/events?limit=3');
-        setEvents(response.data);
+        const response = await fetchPublicEvents();
+        console.log('Fetched events:', response); // Debug log
+        setEvents(response);
         setLoading(false);
       } catch (err) {
         console.error('Error fetching events:', err);

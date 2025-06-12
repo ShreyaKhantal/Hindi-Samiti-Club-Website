@@ -13,6 +13,21 @@ const EventCard = ({ event }) => {
     is_active
   } = event;
 
+  // Helper function to check if event is currently active
+  const isEventActive = () => {
+    if (!is_active) return false;
+    
+    const today = new Date();
+    const eventDate = new Date(date);
+    
+    // Reset time to compare only dates
+    today.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+    
+    // Event is active if it's marked active AND the date is today or in the future
+    return eventDate >= today;
+  };
+
   // Format the date
   const formattedDate = format(new Date(date), 'MMM dd, yyyy');
   
@@ -20,6 +35,8 @@ const EventCard = ({ event }) => {
   const shortDescription = description && description.length > 100
     ? `${description.substring(0, 100)}...`
     : description;
+
+  const eventActive = isEventActive();
 
   return (
     <motion.div
@@ -36,16 +53,11 @@ const EventCard = ({ event }) => {
           alt={name}
           className="w-full h-full object-cover"
         />
-        {!is_active && (
-          <div className="absolute top-0 right-0 bg-gray-800 text-white px-3 py-1 m-2 rounded-md text-sm">
-            Completed
-          </div>
-        )}
-        {is_active && (
-          <div className="absolute top-0 right-0 bg-green-600 text-white px-3 py-1 m-2 rounded-md text-sm">
-            Active
-          </div>
-        )}
+        <div className={`absolute top-0 right-0 px-3 py-1 m-2 rounded-md text-sm text-white ${
+          eventActive ? 'bg-green-600' : 'bg-gray-800'
+        }`}>
+          {eventActive ? 'Active' : 'Completed'}
+        </div>
       </div>
       
       <div className="p-4">
@@ -62,7 +74,7 @@ const EventCard = ({ event }) => {
             whileTap={{ scale: 0.95 }}
             className="w-full bg-orange-600 text-white py-2 rounded-md hover:bg-orange-700 transition-colors flex items-center justify-center"
           >
-            {is_active ? 'Register Now' : 'View Details'}
+            {eventActive ? 'Register Now' : 'View Details'}
           </motion.button>
         </Link>
       </div>

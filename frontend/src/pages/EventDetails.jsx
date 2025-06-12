@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import RegistrationForm from '../components/RegistrationForm';
-import { fetchEvents } from '../utils/api';
+import { fetchPublicEventDetails } from '../utils/api';
 
 const EventDetails = () => {
   const { eventId } = useParams();
@@ -17,7 +17,8 @@ const EventDetails = () => {
   useEffect(() => {
     const getEventDetails = async () => {
       try {
-        const data = await fetchEvents(eventId);
+        const data = await fetchPublicEventDetails(eventId);
+        console.log('Event details:', data); // Debug log
         setEvent(data);
         setLoading(false);
       } catch (error) {
@@ -53,8 +54,16 @@ const EventDetails = () => {
   };
 
   const isEventActive = () => {
-    if (!event) return false;
-    return event.is_active && new Date(event.date) >= new Date();
+    if (!event || !event.is_active) return false;
+    
+    const today = new Date();
+    const eventDate = new Date(event.date);
+    
+    // Reset time to compare only dates
+    today.setHours(0, 0, 0, 0);
+    eventDate.setHours(0, 0, 0, 0);
+    
+    return eventDate >= today;
   };
 
   const getStatusBadge = () => {
@@ -112,6 +121,8 @@ const EventDetails = () => {
     );
   }
 
+  const eventActive = isEventActive();
+
   return (
     <div className="bg-gradient-to-b from-orange-50 to-amber-50 min-h-screen">
       <Navbar />
@@ -150,9 +161,9 @@ const EventDetails = () => {
                   <span>{formatDate(event.date)}</span>
                 </div>
                 <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  isEventActive() ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  eventActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                 }`}>
-                  {isEventActive() ? 'Active' : 'Past Event'}
+                  {eventActive ? 'Active' : 'Completed'}
                 </div>
               </div>
               <div className="prose max-w-none text-gray-700">
@@ -160,7 +171,7 @@ const EventDetails = () => {
               </div>
             </div>
 
-            {isEventActive() ? (
+            {eventActive ? (
               <div className="mt-10 p-6 bg-orange-50 rounded-lg border border-orange-200">
                 <h2 className="text-2xl font-bold text-orange-800 mb-4 font-serif">Registration</h2>
                 

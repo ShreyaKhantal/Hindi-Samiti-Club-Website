@@ -21,7 +21,14 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # JWT Configuration
-app.config["JWT_SECRET_KEY"] = "ShreyaKhantal:)"  # Change this in production
+app.config["SECRET_KEY"] = "ShreyaKhantal:)"  
+
+# Upload Configuration
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Create upload folder if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Redis Cache Configuration
 app.config['CACHE_TYPE'] = 'RedisCache'
@@ -44,20 +51,28 @@ migrate = Migrate(app, db)
 # Initialize JWT - THIS IS CRUCIAL
 jwt = JWTManager(app)
 
+def create_default_admin():
+    """Create a default admin user if none exists"""
+    if not Admin.query.first():
+        default_admin = Admin(
+            username='admin',
+            password_hash=generate_password_hash('admin123')  # Change this password!
+        )
+        db.session.add(default_admin)
+        db.session.commit()
+        print("Default admin created - Username: admin, Password: admin123")
+        print("Please change the default password immediately!")
+
+def initialize_app():
+    """Initialize the application with database and default data"""
+    db.create_all()
+    create_default_admin()
+
 # Register Blueprint
 app.register_blueprint(route)
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
-        
-        # # Create default admin if not exists
-        # admin_exists = Admin.query.filter_by(username="Admin").first()
-        # if not admin_exists:
-        #     admin_password = generate_password_hash('admin')
-        #     admin = Admin(username='Admin', password_hash=admin_password)
-        #     db.session.add(admin)
-        #     db.session.commit()
-        #     print("Default admin created - Username: Admin, Password: admin")
+        initialize_app()
             
     app.run(debug=True)

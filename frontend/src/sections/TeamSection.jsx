@@ -287,12 +287,7 @@ const TeamSection = () => {
                   ...styles.teamMemberContainer,
                   animationDelay: `${0.1 * (index % 8)}s`
                 }}>
-                  <TeamMemberCard 
-                    name={member.name}
-                    role={member.role}
-                    imageUrl={member.image_url}
-                    description={member.description}
-                  />
+                  <TeamMemberCard member={member} />
                 </div>
               ))}
             </div>
@@ -306,13 +301,7 @@ const TeamSection = () => {
             <div style={styles.presidentContainer}>
               {getPresident().map(member => (
                 <div key={member.id} style={styles.presidentCard}>
-                  <TeamMemberCard 
-                    name={member.name}
-                    role={member.role}
-                    imageUrl={member.image_url}
-                    description={member.description}
-                    isPresident={true}
-                  />
+                  <TeamMemberCard member={member} />
                 </div>
               ))}
             </div>
@@ -329,12 +318,7 @@ const TeamSection = () => {
                   ...styles.teamMemberContainer,
                   animationDelay: `${0.1 * (index % 8)}s`
                 }}>
-                  <TeamMemberCard 
-                    name={member.name}
-                    role={member.role}
-                    imageUrl={member.image_url}
-                    description={member.description}
-                  />
+                  <TeamMemberCard member={member} />
                 </div>
               ))}
             </div>
@@ -351,12 +335,7 @@ const TeamSection = () => {
                   ...styles.teamMemberContainer,
                   animationDelay: `${0.1 * (index % 8)}s`
                 }}>
-                  <TeamMemberCard 
-                    name={member.name}
-                    role={member.role}
-                    imageUrl={member.image_url}
-                    description={member.description}
-                  />
+                  <TeamMemberCard member={member} />
                 </div>
               ))}
             </div>

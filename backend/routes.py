@@ -13,7 +13,16 @@ from sqlalchemy.orm import joinedload
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+from functools import wraps
+import jwt as pyjwt
+import os
+from io import BytesIO
+import uuid
 
+# Import your models
+from models import db, Admin, Image, Intro, Event, EventFormField, Registration, RegistrationFieldResponse, TeamMember
 
 # JWT Secret Key (Change this for production!)
 jwt = JWTManager()
@@ -21,14 +30,181 @@ SECRET_KEY = "ShreyaKhantal:)"
 
 route = Blueprint('main', __name__)
 
+# Allowed file extensions for image uploads
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Add this route to your existing routes.py file
-from models import Admin
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        print("🔥 Raw token header:", token)
+
+        if not token:
+            return jsonify({'message': 'Token is missing'}), 401
+
+        try:
+            if token.startswith('Bearer '):
+                token = token[7:]
+
+            print("🧪 Decoding token...")
+            data = pyjwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            print("✅ Token decoded:", data)
+
+            admin_id = data.get("sub")  # we encoded admin_id as a string in 'sub'
+
+            if not admin_id:
+                return jsonify({'message': 'Token payload missing `sub` (admin_id)'}), 401
+
+            current_admin = Admin.query.get(int(admin_id))  # convert to int
+            if not current_admin:
+                return jsonify({'message': 'Invalid token: admin not found'}), 401
+
+        except pyjwt.ExpiredSignatureError:
+            print("❌ Token expired")
+            return jsonify({'message': 'Token has expired'}), 401
+        except pyjwt.InvalidTokenError as e:
+            print("❌ Invalid token:", str(e))
+            return jsonify({'message': 'Token is invalid', 'error': str(e)}), 401
+
+        return f(current_admin, *args, **kwargs)
+
+    return decorated
+
+# ==================== PUBLIC ROUTES (No Authentication Required) ====================
+
+@route.route('/api/intro', methods=['GET'])
+def get_public_intro():
+    """Public endpoint to get introduction text for homepage"""
+    try:
+        intro = Intro.query.first()
+        if intro:
+            return jsonify({'text': intro.text}), 200
+        else:
+            return jsonify({'text': ''}), 200
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@route.route('/api/images', methods=['GET'])
+def get_public_images():
+    """Public endpoint to get all images for homepage gallery"""
+    try:
+        images = Image.query.order_by(Image.created_at.desc()).all()
+        images_data = []
+        
+        for img in images:
+            images_data.append({
+                'id': img.id,
+                'url': img.url,
+                'caption': img.caption,
+                'created_at': img.created_at.isoformat()
+            })
+        
+        return jsonify(images_data), 200
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@route.route('/api/team-members', methods=['GET'])
+def get_public_team_members():
+    """Public endpoint to get team members for about/team page"""
+    try:
+        team_members = TeamMember.query.all()
+        team_data = []
+        
+        for member in team_members:
+            team_data.append({
+                'id': member.id,
+                'name': member.name,
+                'role': member.role,
+                'image_url': member.image_url,
+                'description': member.description
+            })
+        
+        return jsonify(team_data), 200
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@route.route('/api/events', methods=['GET'])
+def get_public_events():
+    """Public endpoint to get active events for events page"""
+    try:
+        include_form_fields = request.args.get('include_form_fields', 'false').lower() == 'true'
+        
+        # Only return active events for public access
+        events = Event.query.filter_by(is_active=True).order_by(Event.date.desc()).all()
+        events_data = []
+        
+        for event in events:
+            event_data = {
+                'id': event.id,
+                'name': event.name,
+                'date': event.date.isoformat(),
+                'description': event.description,
+                'cover_image_url': event.cover_image_url
+            }
+            
+            # Include form fields if requested
+            if include_form_fields:
+                form_fields = []
+                for field in event.form_fields:
+                    form_fields.append({
+                        'id': field.id,
+                        'label': field.label,
+                        'field_type': field.field_type,
+                        'is_required': field.is_required,
+                        'order': field.order
+                    })
+                event_data['form_fields'] = sorted(form_fields, key=lambda x: x['order'])
+            
+            events_data.append(event_data)
+        
+        return jsonify(events_data), 200
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+@route.route('/api/events/<int:event_id>', methods=['GET'])
+def get_public_event_details(event_id):
+    """Public endpoint to get specific event details with form fields"""
+    try:
+        event = Event.query.filter_by(id=event_id, is_active=True).first()
+        
+        if not event:
+            return jsonify({'message': 'Event not found or not active'}), 404
+        
+        form_fields = []
+        for field in event.form_fields:
+            form_fields.append({
+                'id': field.id,
+                'label': field.label,
+                'field_type': field.field_type,
+                'is_required': field.is_required,
+                'order': field.order
+            })
+        
+        event_data = {
+            'id': event.id,
+            'name': event.name,
+            'date': event.date.isoformat(),
+            'description': event.description,
+            'cover_image_url': event.cover_image_url,
+            'form_fields': sorted(form_fields, key=lambda x: x['order'])
+        }
+        
+        return jsonify(event_data), 200
+        
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
+# ==================== AUTHENTICATION ROUTES ====================
 
 @route.route('/api/auth/login', methods=['POST'])
 def admin_login():
-    """Admin login endpoint"""
+    """Admin login endpoint - MAIN LOGIN ROUTE"""
     try:
         data = request.get_json()
         
@@ -64,16 +240,19 @@ def admin_login():
                 'message': 'Invalid username or password'
             }), 401
         
-        # Create JWT token
-        access_token = create_access_token(
-            identity=admin.id,
-            expires_delta=timedelta(hours=24)
-        )
+        # Create JWT token using pyjwt (consistent with token_required decorator)
+        payload = {
+            'sub': str(admin.id),  # Keep as string for consistency
+            'username': admin.username,
+            'exp': datetime.utcnow() + timedelta(hours=24)
+        }
+        
+        token = pyjwt.encode(payload, current_app.config['SECRET_KEY'], algorithm='HS256')
         
         return jsonify({
             'success': True,
             'message': 'Login successful',
-            'access_token': access_token,
+            'access_token': token,
             'admin': {
                 'id': admin.id,
                 'username': admin.username
@@ -87,172 +266,41 @@ def admin_login():
             'message': 'Login failed. Please try again.'
         }), 500
 
-@route.route('/api/admin/verify', methods=['GET'])
-@jwt_required()
-def verify_admin():
-    """Verify admin token"""
-    try:
-        admin_id = get_jwt_identity()
-        admin = Admin.query.get(admin_id)
-        
-        if not admin:
-            return jsonify({
-                'success': False,
-                'message': 'Admin not found'
-            }), 404
-        
-        return jsonify({
-            'success': True,
-            'admin': {
-                'id': admin.id,
-                'username': admin.username
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': 'Token verification failed'
-        }), 401
-
-
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
-from functools import wraps
-import jwt
-import os
-import pandas as pd
-from datetime import datetime, timedelta
-from io import BytesIO
-import uuid
-
-# Import your models
-from models import db, Admin, Image, Intro, Event, EventFormField, Registration, RegistrationFieldResponse, TeamMember
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-this'  # Change this to a secure secret key
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///hindi_samiti.db'  # Or your database URI
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Initialize extensions
-db.init_app(app)
-CORS(app)
-
-# Create upload folder if it doesn't exist
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-# Allowed file extensions for image uploads
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# JWT Token decorator
-def token_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        token = request.headers.get('Authorization')
-        
-        if not token:
-            return jsonify({'message': 'Token is missing'}), 401
-        
-        try:
-            # Remove 'Bearer ' prefix if present
-            if token.startswith('Bearer '):
-                token = token[7:]
-            
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-            current_admin = Admin.query.get(data['admin_id'])
-            
-            if not current_admin:
-                return jsonify({'message': 'Invalid token'}), 401
-                
-        except jwt.ExpiredSignatureError:
-            return jsonify({'message': 'Token has expired'}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({'message': 'Token is invalid'}), 401
-        
-        return f(current_admin, *args, **kwargs)
-    
-    return decorated
-
-# ==================== AUTHENTICATION ROUTES ====================
-
-@app.route('/api/admin/login', methods=['POST'])
-def admin_login():
-    try:
-        data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-        
-        if not username or not password:
-            return jsonify({'message': 'Username and password are required'}), 400
-        
-        admin = Admin.query.filter_by(username=username).first()
-        
-        if admin and check_password_hash(admin.password_hash, password):
-            # Generate JWT token
-            token = jwt.encode({
-                'admin_id': admin.id,
-                'username': admin.username,
-                'exp': datetime.utcnow() + timedelta(hours=24)
-            }, app.config['SECRET_KEY'], algorithm='HS256')
-            
-            return jsonify({
-                'token': token,
-                'message': 'Login successful'
-            }), 200
-        else:
-            return jsonify({'message': 'Invalid credentials'}), 401
-            
-    except Exception as e:
-        return jsonify({'message': str(e)}), 500
-
-@app.route('/api/admin/verify-token', methods=['GET'])
+@route.route('/api/admin/verify-token', methods=['GET'])
 @token_required
 def verify_token(current_admin):
-    return jsonify({'valid': True, 'admin': current_admin.username}), 200
+    """Verify admin token"""
+    return jsonify({
+        'valid': True, 
+        'admin': {
+            'id': current_admin.id,
+            'username': current_admin.username
+        }
+    }), 200
 
-# ==================== HOME CONTENT ROUTES ====================
+# ==================== ADMIN HOME CONTENT ROUTES ====================
 
-@app.route('/api/admin/intro', methods=['GET'])
+@route.route('/api/admin/intro', methods=['GET'])
 @token_required
 def get_intro(current_admin):
-    try:
-        intro = Intro.query.first()
-        if intro:
-            return jsonify({'text': intro.text}), 200
-        else:
-            return jsonify({'text': ''}), 200
-    except Exception as e:
-        return jsonify({'message': str(e)}), 500
+    intro = Intro.query.first()
+    return jsonify({'text': intro.text if intro else ''}), 200
 
-@app.route('/api/admin/intro', methods=['PUT'])
+@route.route('/api/admin/intro', methods=['PUT'])
 @token_required
 def update_intro(current_admin):
-    try:
-        data = request.get_json()
-        text = data.get('text', '')
-        
-        intro = Intro.query.first()
-        if intro:
-            intro.text = text
-        else:
-            intro = Intro(text=text)
-            db.session.add(intro)
-        
-        db.session.commit()
-        return jsonify({'message': 'Introduction updated successfully'}), 200
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'message': str(e)}), 500
+    data = request.get_json()
+    text = data.get('text', '')
+    intro = Intro.query.first()
+    if intro:
+        intro.text = text
+    else:
+        intro = Intro(text=text)
+        db.session.add(intro)
+    db.session.commit()
+    return jsonify({'message': 'Intro updated successfully'}), 200
 
-@app.route('/api/admin/images', methods=['GET'])
+@route.route('/api/admin/images', methods=['GET'])
 @token_required
 def get_images(current_admin):
     try:
@@ -272,7 +320,7 @@ def get_images(current_admin):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/images', methods=['POST'])
+@route.route('/api/admin/images', methods=['POST'])
 @token_required
 def upload_image(current_admin):
     try:
@@ -288,11 +336,13 @@ def upload_image(current_admin):
         if file and allowed_file(file.filename):
             # Generate unique filename
             filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            filepath = os.path.join(upload_folder, filename)
             file.save(filepath)
             
             # Create image record
-            image_url = f'/uploads/{filename}'  # Adjust based on your static file serving setup
+            image_url = f'/uploads/{filename}'
             new_image = Image(url=image_url, caption=caption)
             db.session.add(new_image)
             db.session.commit()
@@ -310,7 +360,7 @@ def upload_image(current_admin):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/images/<int:image_id>', methods=['DELETE'])
+@route.route('/api/admin/images/<int:image_id>', methods=['DELETE'])
 @token_required
 def delete_image(current_admin, image_id):
     try:
@@ -319,7 +369,8 @@ def delete_image(current_admin, image_id):
         # Delete physical file
         if image.url.startswith('/uploads/'):
             filename = image.url.replace('/uploads/', '')
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+            filepath = os.path.join(upload_folder, filename)
             if os.path.exists(filepath):
                 os.remove(filepath)
         
@@ -332,9 +383,9 @@ def delete_image(current_admin, image_id):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-# ==================== EVENTS ROUTES ====================
+# ==================== ADMIN EVENTS ROUTES ====================
 
-@app.route('/api/admin/events', methods=['GET'])
+@route.route('/api/admin/events', methods=['GET'])
 @token_required
 def get_events(current_admin):
     try:
@@ -367,7 +418,7 @@ def get_events(current_admin):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/events', methods=['POST'])
+@route.route('/api/admin/events', methods=['POST'])
 @token_required
 def create_event(current_admin):
     try:
@@ -403,7 +454,7 @@ def create_event(current_admin):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/events/<int:event_id>', methods=['PUT'])
+@route.route('/api/admin/events/<int:event_id>', methods=['PUT'])
 @token_required
 def update_event(current_admin, event_id):
     try:
@@ -438,7 +489,7 @@ def update_event(current_admin, event_id):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/events/<int:event_id>', methods=['DELETE'])
+@route.route('/api/admin/events/<int:event_id>', methods=['DELETE'])
 @token_required
 def delete_event(current_admin, event_id):
     try:
@@ -452,9 +503,9 @@ def delete_event(current_admin, event_id):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-# ==================== REGISTRATIONS ROUTES ====================
+# ==================== ADMIN REGISTRATIONS ROUTES ====================
 
-@app.route('/api/admin/registrations/<int:event_id>', methods=['GET'])
+@route.route('/api/admin/registrations/<int:event_id>', methods=['GET'])
 @token_required
 def get_registrations(current_admin, event_id):
     try:
@@ -481,7 +532,7 @@ def get_registrations(current_admin, event_id):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/registrations/<int:registration_id>/status', methods=['PUT'])
+@route.route('/api/admin/registrations/<int:registration_id>/status', methods=['PUT'])
 @token_required
 def update_registration_status(current_admin, registration_id):
     try:
@@ -501,7 +552,7 @@ def update_registration_status(current_admin, registration_id):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/registrations/<int:event_id>/download', methods=['GET'])
+@route.route('/api/admin/registrations/<int:event_id>/download', methods=['GET'])
 @token_required
 def download_registrations_excel(current_admin, event_id):
     try:
@@ -558,9 +609,9 @@ def download_registrations_excel(current_admin, event_id):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-# ==================== TEAM ROUTES ====================
+# ==================== ADMIN TEAM ROUTES ====================
 
-@app.route('/api/admin/team', methods=['GET'])
+@route.route('/api/admin/team', methods=['GET'])
 @token_required
 def get_team_members(current_admin):
     try:
@@ -581,7 +632,7 @@ def get_team_members(current_admin):
     except Exception as e:
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/team', methods=['POST'])
+@route.route('/api/admin/team', methods=['POST'])
 @token_required
 def create_team_member(current_admin):
     try:
@@ -606,7 +657,7 @@ def create_team_member(current_admin):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/team/<int:member_id>', methods=['PUT'])
+@route.route('/api/admin/team/<int:member_id>', methods=['PUT'])
 @token_required
 def update_team_member(current_admin, member_id):
     try:
@@ -625,7 +676,7 @@ def update_team_member(current_admin, member_id):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@app.route('/api/admin/team/<int:member_id>', methods=['DELETE'])
+@route.route('/api/admin/team/<int:member_id>', methods=['DELETE'])
 @token_required
 def delete_team_member(current_admin, member_id):
     try:
@@ -642,41 +693,7 @@ def delete_team_member(current_admin, member_id):
 # ==================== UTILITY ROUTES ====================
 
 # Serve uploaded files (for development - use nginx/apache in production)
-@app.route('/uploads/<filename>')
+@route.route('/uploads/<filename>')
 def uploaded_file(filename):
-    return send_file(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
-# ==================== INITIALIZATION ====================
-
-def create_default_admin():
-    """Create a default admin user if none exists"""
-    with app.app_context():
-        if not Admin.query.first():
-            default_admin = Admin(
-                username='admin',
-                password_hash=generate_password_hash('admin123')  # Change this password!
-            )
-            db.session.add(default_admin)
-            db.session.commit()
-            print("Default admin created - Username: admin, Password: admin123")
-            print("Please change the default password immediately!")
-
-@app.before_first_request
-def create_tables():
-    db.create_all()
-    create_default_admin()
-
-# # ==================== ERROR HANDLERS ====================
-
-# @app.errorhandler(404)
-# def not_found(error):
-#     return jsonify({'message': 'Resource not found'}), 404
-
-# @app.errorhandler(500)
-# def internal_error(error):
-#     db.session.rollback()
-#     return jsonify({'message': 'Internal server error'}), 500
-
-# @app.errorhandler(413)
-# def too_large(error):
-#     return jsonify({'message': 'File too large'}), 413
+    upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+    return send_file(os.path.join(upload_folder, filename))
