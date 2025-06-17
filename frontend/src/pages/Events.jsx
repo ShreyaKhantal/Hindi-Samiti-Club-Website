@@ -31,10 +31,8 @@ const Events = () => {
     navigate(`/events/${eventId}`);
   };
 
-  // Helper function to check if event is currently active
-  const isEventCurrentlyActive = (event) => {
-    if (!event.is_active) return false;
-    
+  // Helper function to check if event date has passed
+  const isEventDatePassed = (event) => {
     const today = new Date();
     const eventDate = new Date(event.date);
     
@@ -42,16 +40,19 @@ const Events = () => {
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
     
-    return eventDate >= today;
+    return eventDate < today;
   };
 
   const filteredEvents = events.filter(event => {
     if (filter === 'all') return true;
     
     if (filter === 'active') {
-      return isEventCurrentlyActive(event);
+      // Active events are those with registrations open (is_active = true)
+      console.log(`Filtering active events: ${event.name} - is_active: ${Boolean(event.is_active)}`);
+      return event.is_active;
     } else if (filter === 'past') {
-      return !isEventCurrentlyActive(event);
+      // Past events are those whose date has passed
+      return isEventDatePassed(event);
     }
     
     return true;

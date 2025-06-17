@@ -16,11 +16,12 @@ const RegistrationForm = ({ event, onSubmit }) => {
 
   useEffect(() => {
     if (event && event.form_fields) {
-      setFormFields(event.form_fields);
+      // Sort form fields by order if available
+      const sortedFields = [...event.form_fields].sort((a, b) => (a.order || 0) - (b.order || 0));
+      setFormFields(sortedFields);
       
-      // Initialize form data with empty values
       const initialData = {};
-      event.form_fields.forEach(field => {
+      sortedFields.forEach(field => {
         initialData[field.id] = '';
       });
       setFormData(initialData);
@@ -28,6 +29,11 @@ const RegistrationForm = ({ event, onSubmit }) => {
   }, [event]);
 
   const checkExistingRegistration = async () => {
+    if (!event) {
+      setErrors({ submit: 'Event data is not available. Please try again later.' });
+      return;
+    }
+
     if (!email) {
       setErrors({ email: 'Email is required' });
       return;
@@ -42,14 +48,17 @@ const RegistrationForm = ({ event, onSubmit }) => {
     setCheckingEmail(true);
     
     try {
-      const response = await api.get(`/registrations/check/${event.id}?email=${email}`);
+      const response = await api.get(`/registrations/check/${event.id}?email=${encodeURIComponent(email)}`);
       if (response.data.exists) {
         setRegistrationStatus(response.data.status);
+        console.log('Registration exists:', response.data.exists);
       } else {
         setRegistrationStatus('new');
+        console.log('New registration:', response.data.exists);
       }
     } catch (error) {
       console.error('Error checking registration:', error);
+      setErrors({ submit: 'Failed to check registration. Please try again.' });
       setRegistrationStatus('new'); // Assume new if error occurs
     } finally {
       setCheckingEmail(false);
@@ -62,7 +71,6 @@ const RegistrationForm = ({ event, onSubmit }) => {
       [fieldId]: value
     });
     
-    // Clear field-specific error
     if (errors[fieldId]) {
       const newErrors = { ...errors };
       delete newErrors[fieldId];
@@ -73,11 +81,23 @@ const RegistrationForm = ({ event, onSubmit }) => {
   const handleScreenshotChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors({ screenshot: 'File size must be less than 5MB' });
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        setErrors({ screenshot: 'Only PNG, JPG, JPEG, and GIF files are allowed' });
+        return;
+      }
+
       setScreenshot(file);
       const previewUrl = URL.createObjectURL(file);
       setScreenshotPreview(previewUrl);
       
-      // Clear screenshot error
       if (errors.screenshot) {
         const newErrors = { ...errors };
         delete newErrors.screenshot;
@@ -89,9 +109,9 @@ const RegistrationForm = ({ event, onSubmit }) => {
   const validateForm = () => {
     const newErrors = {};
     
-    // Validate all required fields
+    // Validate required form fields
     formFields.forEach(field => {
-      if (field.is_required && !formData[field.id]) {
+      if (field.is_required && (!formData[field.id] || formData[field.id].trim() === '')) {
         newErrors[field.id] = `${field.label} is required`;
       }
     });
@@ -108,6 +128,11 @@ const RegistrationForm = ({ event, onSubmit }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (!event) {
+      setErrors({ submit: 'Event data is not available. Please try again later.' });
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -115,37 +140,144 @@ const RegistrationForm = ({ event, onSubmit }) => {
     setLoading(true);
     
     try {
-      // First upload the screenshot to get its URL
+      // Validate screenshot file again before upload
+      if (!screenshot || !screenshot instanceof File) {
+        setErrors({ submit: 'Invalid screenshot file. Please select a valid image file.' });
+        setLoading(false);
+        return;
+      }
+
+      // Upload screenshot first
       const formDataWithFile = new FormData();
-      formDataWithFile.append('file', screenshot);
+      formDataWithFile.append('file', screenshot, screenshot.name);
       
-      const uploadResponse = await api.post('/upload', formDataWithFile);
+      // Debug: Log FormData contents
+      console.log('FormData contents:');
+      for (let [key, value] of formDataWithFile.entries()) {
+        console.log(key, value);
+      }
+      
+      // Make upload request with proper headers
+      const uploadResponse = await api.post('/upload', formDataWithFile, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
       const screenshotUrl = uploadResponse.data.url;
       
-      // Then submit the registration with the screenshot URL
+      // Prepare registration data
       const registrationData = {
         event_id: event.id,
-        email,
+        email: email.toLowerCase().trim(),
         screenshot_url: screenshotUrl,
-        responses: Object.keys(formData).map(fieldId => ({
-          field_id: parseInt(fieldId),
-          value: formData[fieldId]
-        }))
+        responses: Object.keys(formData)
+          .filter(fieldId => formData[fieldId] && formData[fieldId].trim() !== '')
+          .map(fieldId => ({
+            field_id: parseInt(fieldId),
+            value: formData[fieldId].trim()
+          }))
       };
       
-      await api.post('/registrations', registrationData);
+      // Submit registration
+      const response = await api.post('/registrations', registrationData);
       
-      // Update status after successful registration
       setRegistrationStatus('pending');
       
       if (onSubmit) {
-        onSubmit(registrationData);
+        onSubmit(response.data);
       }
     } catch (error) {
       console.error('Error submitting registration:', error);
-      setErrors({ submit: 'Failed to submit registration. Please try again.' });
+      
+      // Handle specific error messages from backend
+      if (error.response && error.response.data && error.response.data.error) {
+        setErrors({ submit: error.response.data.error });
+      } else {
+        setErrors({ submit: 'Failed to submit registration. Please try again.' });
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const renderFieldInput = (field) => {
+    const fieldValue = formData[field.id] || '';
+    const hasError = errors[field.id];
+    const baseInputClass = `w-full border ${hasError ? 'border-red-500' : 'border-orange-300'} rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-orange-500`;
+
+    switch (field.field_type) {
+      case 'text':
+        return (
+          <input
+            type="text"
+            id={`field-${field.id}`}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClass}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+          />
+        );
+      
+      case 'email':
+        return (
+          <input
+            type="email"
+            id={`field-${field.id}`}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClass}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+          />
+        );
+      
+      case 'textarea':
+        return (
+          <textarea
+            id={`field-${field.id}`}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClass}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+            rows={3}
+          />
+        );
+      
+      case 'number':
+        return (
+          <input
+            type="number"
+            id={`field-${field.id}`}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClass}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+          />
+        );
+      
+      case 'tel':
+        return (
+          <input
+            type="tel"
+            id={`field-${field.id}`}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClass}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+          />
+        );
+      
+      default:
+        return (
+          <input
+            type="text"
+            id={`field-${field.id}`}
+            value={fieldValue}
+            onChange={(e) => handleInputChange(field.id, e.target.value)}
+            className={baseInputClass}
+            placeholder={`Enter ${field.label.toLowerCase()}`}
+          />
+        );
     }
   };
 
@@ -186,6 +318,14 @@ const RegistrationForm = ({ event, onSubmit }) => {
     }
   };
 
+  if (!event) {
+    return (
+      <div className="bg-orange-50 rounded-lg shadow-lg p-6 max-w-xl mx-auto">
+        <p className="text-red-500 text-center">Error: Event data is not available. Please try again later.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-orange-50 rounded-lg shadow-lg p-6 max-w-xl mx-auto">
       <h2 className="text-2xl font-bold text-orange-900 mb-6 text-center">
@@ -198,7 +338,6 @@ const RegistrationForm = ({ event, onSubmit }) => {
       
       {(!registrationStatus || registrationStatus === 'new') && (
         <form onSubmit={handleSubmit}>
-          {/* Email verification step */}
           <div className="mb-6">
             <div className="flex space-x-2">
               <div className="flex-grow">
@@ -235,36 +374,15 @@ const RegistrationForm = ({ event, onSubmit }) => {
             </div>
           </div>
           
-          {/* Form fields - show only if email check returned 'new' */}
           {registrationStatus === 'new' && (
             <>
-              {formFields.map((field) => (
+              {formFields.length > 0 && formFields.map((field) => (
                 <div key={field.id} className="mb-4">
                   <label htmlFor={`field-${field.id}`} className="block text-orange-800 font-medium mb-1">
                     {field.label} {field.is_required && <span className="text-red-500">*</span>}
                   </label>
                   
-                  {field.field_type === 'text' && (
-                    <input
-                      type="text"
-                      id={`field-${field.id}`}
-                      value={formData[field.id] || ''}
-                      onChange={(e) => handleInputChange(field.id, e.target.value)}
-                      className={`w-full border ${errors[field.id] ? 'border-red-500' : 'border-orange-300'} rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-orange-500`}
-                      placeholder={`Enter ${field.label.toLowerCase()}`}
-                    />
-                  )}
-                  
-                  {field.field_type === 'email' && (
-                    <input
-                      type="email"
-                      id={`field-${field.id}`}
-                      value={formData[field.id] || ''}
-                      onChange={(e) => handleInputChange(field.id, e.target.value)}
-                      className={`w-full border ${errors[field.id] ? 'border-red-500' : 'border-orange-300'} rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-orange-500`}
-                      placeholder={`Enter ${field.label.toLowerCase()}`}
-                    />
-                  )}
+                  {renderFieldInput(field)}
                   
                   {errors[field.id] && (
                     <p className="text-red-500 text-sm mt-1">{errors[field.id]}</p>
@@ -272,7 +390,6 @@ const RegistrationForm = ({ event, onSubmit }) => {
                 </div>
               ))}
               
-              {/* Payment screenshot upload */}
               <div className="mb-6">
                 <label className="block text-orange-800 font-medium mb-1">
                   Payment Screenshot <span className="text-red-500">*</span>
@@ -315,7 +432,6 @@ const RegistrationForm = ({ event, onSubmit }) => {
                 )}
               </div>
               
-              {/* Submit button */}
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}

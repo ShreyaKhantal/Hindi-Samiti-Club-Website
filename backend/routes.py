@@ -135,7 +135,7 @@ def get_public_events():
         include_form_fields = request.args.get('include_form_fields', 'false').lower() == 'true'
         
         # Only return active events for public access
-        events = Event.query.filter_by(is_active=True).order_by(Event.date.desc()).all()
+        events = Event.query.order_by(Event.date.desc()).all()
         events_data = []
         
         for event in events:
@@ -144,7 +144,8 @@ def get_public_events():
                 'name': event.name,
                 'date': event.date.isoformat(),
                 'description': event.description,
-                'cover_image_url': event.cover_image_url
+                'cover_image_url': event.cover_image_url,
+                'is_active': event.is_active
             }
             
             # Include form fields if requested
@@ -171,7 +172,7 @@ def get_public_events():
 def get_public_event_details(event_id):
     """Public endpoint to get specific event details with form fields"""
     try:
-        event = Event.query.filter_by(id=event_id, is_active=True).first()
+        event = Event.query.filter_by(id=event_id).first()
         
         if not event:
             return jsonify({'message': 'Event not found or not active'}), 404
@@ -192,7 +193,8 @@ def get_public_event_details(event_id):
             'date': event.date.isoformat(),
             'description': event.description,
             'cover_image_url': event.cover_image_url,
-            'form_fields': sorted(form_fields, key=lambda x: x['order'])
+            'form_fields': sorted(form_fields, key=lambda x: x['order']),
+            'is_active': event.is_active
         }
         
         return jsonify(event_data), 200
@@ -511,27 +513,28 @@ def get_registrations(current_admin, event_id):
     try:
         registrations = Registration.query.filter_by(event_id=event_id).order_by(Registration.timestamp.desc()).all()
         registrations_data = []
-        
+        print(event_id)
         for reg in registrations:
-            # Get all field responses for this registration
             responses = {}
             for response in reg.responses:
-                responses[response.field.label] = response.value
-            
+                if response.field and hasattr(response.field, 'label'):
+                    responses[response.field.label] = response.value
+                else:
+                    print(f"Warning: Invalid response for registration {reg.id}")
             registrations_data.append({
                 'id': reg.id,
-                'email': reg.email,
-                'screenshot_url': reg.screenshot_url,
-                'status': reg.status,
-                'timestamp': reg.timestamp.isoformat(),
+                'email': reg.email or '',
+                'screenshot_url': reg.screenshot_url or '',
+                'status': reg.status or 'pending',
+                'timestamp': reg.timestamp.isoformat() if reg.timestamp else None,
                 'responses': responses
             })
-        
+            print(registrations_data)
         return jsonify(registrations_data), 200
-        
     except Exception as e:
+        print(f"Error in get_registrations: {str(e)}")
         return jsonify({'message': str(e)}), 500
-
+    
 @route.route('/api/admin/registrations/<int:registration_id>/status', methods=['PUT'])
 @token_required
 def update_registration_status(current_admin, registration_id):
@@ -697,3 +700,388 @@ def delete_team_member(current_admin, member_id):
 def uploaded_file(filename):
     upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
     return send_file(os.path.join(upload_folder, filename))
+
+
+@route.route('/api/events/<int:event_id>/check-registration', methods=['GET'])
+def check_registration_status(event_id):
+    """
+    Check if an email is already registered for an event and return registration status
+    """
+    try:
+        email = request.args.get('email')
+        
+        if not email:
+            return jsonify({'error': 'Email parameter is required'}), 400
+        
+        # Check if the event exists
+        event = db.session.query(Event).filter_by(id=event_id).first()
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        
+        # Check if email is already registered for this event
+        registration = db.session.query(Registration).filter_by(
+            event_id=event_id,
+            email=email.lower().strip()
+        ).first()
+        
+        if registration:
+            return jsonify({
+                'exists': True,
+                'status': registration.status,
+                'registration_id': registration.id,
+                'timestamp': registration.timestamp.isoformat()
+            }), 200
+        else:
+            return jsonify({
+                'exists': False
+            }), 200
+            
+    except Exception as e:
+        print(f"Error checking registration status: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@route.route('/api/events/<int:event_id>/register', methods=['POST'])
+def register_for_event(event_id):
+    """
+    Register a user for an event
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        email = data.get('email', '').lower().strip()
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+        
+        # Check if the event exists and is active
+        event = db.session.query(Event).filter_by(id=event_id).first()
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        
+        if not event.is_active:
+            return jsonify({'error': 'Registration is closed for this event'}), 400
+        
+        # Check if email is already registered
+        existing_registration = db.session.query(Registration).filter_by(
+            event_id=event_id,
+            email=email
+        ).first()
+        
+        if existing_registration:
+            return jsonify({
+                'error': 'Email already registered',
+                'status': existing_registration.status
+            }), 400
+        
+        # Create new registration
+        registration = Registration(
+            event_id=event_id,
+            email=email,
+            status='pending'
+        )
+        
+        db.session.add(registration)
+        db.session.flush()  # To get the registration ID
+        
+        # Handle form field responses
+        form_responses = data.get('responses', [])
+        for response_data in form_responses:
+            field_id = response_data.get('field_id')
+            value = response_data.get('value')
+            
+            if field_id and value:
+                field_response = RegistrationFieldResponse(
+                    registration_id=registration.id,
+                    field_id=field_id,
+                    value=value
+                )
+                db.session.add(field_response)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'registration_id': registration.id,
+            'status': registration.status,
+            'message': 'Registration submitted successfully. Please wait for verification.'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error registering for event: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+import re
+
+# Configuration for file uploads
+UPLOAD_FOLDER = 'uploads/screenshots'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_email(email):
+    pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    return re.match(pattern, email) is not None
+
+@route.route('/api/registrations/check/<int:event_id>', methods=['GET'])
+def check_existing_registration(event_id):
+    """
+    Check if an email is already registered for a specific event
+    """
+    try:
+        email = request.args.get('email')
+        
+        if not email:
+            return jsonify({'error': 'Email parameter is required'}), 400
+        
+        # Validate email format
+        if not validate_email(email):
+            return jsonify({'error': 'Invalid email format'}), 400
+        
+        # Normalize email
+        email = email.lower().strip()
+        
+        # Check if the event exists
+        event = db.session.query(Event).filter_by(id=event_id).first()
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        
+        # Check for existing registration
+        registration = db.session.query(Registration).filter_by(
+            event_id=event_id,
+            email=email
+        ).first()
+        
+        if registration:
+            return jsonify({
+                'exists': True,
+                'status': registration.status,
+                'registration_id': registration.id,
+                'timestamp': registration.timestamp.isoformat(),
+                'event_name': event.name
+            }), 200
+        else:
+            return jsonify({
+                'exists': False,
+                'event_name': event.name
+            }), 200
+            
+    except Exception as e:
+        print(f"Error checking registration: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@route.route('/api/upload', methods=['POST'])
+def upload_file():
+    """
+    Handle file upload for payment screenshots
+    """
+    try:
+        # Check if the post request has the file part
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part in the request'}), 400
+        
+        file = request.files['file']
+        
+        # If user does not select file, browser also submits an empty part without filename
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check file size
+        file.seek(0, os.SEEK_END)
+        file_size = file.tell()
+        file.seek(0)
+        
+        if file_size > MAX_FILE_SIZE:
+            return jsonify({'error': 'File size exceeds 5MB limit'}), 400
+        
+        if file and allowed_file(file.filename):
+            # Create upload directory if it doesn't exist
+            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+            
+            # Generate unique filename
+            file_extension = file.filename.rsplit('.', 1)[1].lower()
+            unique_filename = f"{uuid.uuid4().hex}.{file_extension}"
+            filename = secure_filename(unique_filename)
+            
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            
+            # Return the file URL (adjust based on your static file serving setup)
+            file_url = f"/uploads/screenshots/{filename}"
+            
+            return jsonify({
+                'success': True,
+                'url': file_url,
+                'filename': filename
+            }), 200
+        else:
+            return jsonify({'error': 'Invalid file type. Only PNG, JPG, JPEG, and GIF files are allowed'}), 400
+            
+    except Exception as e:
+        print(f"Error uploading file: {str(e)}")
+        return jsonify({'error': 'File upload failed'}), 500
+
+
+@route.route('/api/registrations', methods=['POST'])
+def create_registration():
+    """
+    Create a new registration for an event
+    """
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+        
+        # Extract and validate required fields
+        event_id = data.get('event_id')
+        email = data.get('email', '').lower().strip()
+        screenshot_url = data.get('screenshot_url')
+        responses = data.get('responses', [])
+        
+        # Validation
+        if not event_id:
+            return jsonify({'error': 'Event ID is required'}), 400
+        
+        if not email or not validate_email(email):
+            return jsonify({'error': 'Valid email is required'}), 400
+        
+        if not screenshot_url:
+            return jsonify({'error': 'Payment screenshot is required'}), 400
+        
+        # Check if event exists and is active
+        event = db.session.query(Event).filter_by(id=event_id).first()
+        if not event:
+            return jsonify({'error': 'Event not found'}), 404
+        
+        if not event.is_active:
+            return jsonify({'error': 'Registration is closed for this event'}), 400
+        
+        # Check if email is already registered
+        existing_registration = db.session.query(Registration).filter_by(
+            event_id=event_id,
+            email=email
+        ).first()
+        
+        if existing_registration:
+            return jsonify({
+                'error': 'Email already registered for this event',
+                'existing_status': existing_registration.status
+            }), 400
+        
+        # Validate form field responses
+        required_fields = db.session.query(EventFormField).filter_by(
+            event_id=event_id,
+            is_required=True
+        ).all()
+        
+        response_field_ids = {r.get('field_id') for r in responses if r.get('field_id')}
+        required_field_ids = {field.id for field in required_fields}
+        
+        missing_fields = required_field_ids - response_field_ids
+        if missing_fields:
+            missing_field_labels = [
+                field.label for field in required_fields 
+                if field.id in missing_fields
+            ]
+            return jsonify({
+                'error': f'Missing required fields: {", ".join(missing_field_labels)}'
+            }), 400
+        
+        # Create the registration
+        registration = Registration(
+            event_id=event_id,
+            email=email,
+            screenshot_url=screenshot_url,
+            status='pending',
+            timestamp=datetime.utcnow()
+        )
+        
+        db.session.add(registration)
+        db.session.flush()  # Get the registration ID
+        
+        # Add form field responses
+        for response_data in responses:
+            field_id = response_data.get('field_id')
+            value = response_data.get('value', '').strip()
+            
+            if field_id and value:
+                # Verify the field exists and belongs to this event
+                field = db.session.query(EventFormField).filter_by(
+                    id=field_id,
+                    event_id=event_id
+                ).first()
+                
+                if field:
+                    field_response = RegistrationFieldResponse(
+                        registration_id=registration.id,
+                        field_id=field_id,
+                        value=value
+                    )
+                    db.session.add(field_response)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'registration_id': registration.id,
+            'status': registration.status,
+            'message': 'Registration submitted successfully. Please wait for verification.',
+            'event_name': event.name,
+            'timestamp': registration.timestamp.isoformat()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating registration: {str(e)}")
+        return jsonify({'error': 'Failed to create registration'}), 500
+
+
+@route.route('/api/registrations/<int:registration_id>', methods=['GET'])
+def get_registration_details(registration_id):
+    """
+    Get details of a specific registration (optional - for admin use)
+    """
+    try:
+        registration = db.session.query(Registration).filter_by(id=registration_id).first()
+        
+        if not registration:
+            return jsonify({'error': 'Registration not found'}), 404
+        
+        # Get form field responses
+        responses = db.session.query(RegistrationFieldResponse)\
+            .join(EventFormField)\
+            .filter(RegistrationFieldResponse.registration_id == registration_id)\
+            .all()
+        
+        response_data = []
+        for response in responses:
+            response_data.append({
+                'field_label': response.field.label,
+                'field_type': response.field.field_type,
+                'value': response.value
+            })
+        
+        registration_data = {
+            'id': registration.id,
+            'event_id': registration.event_id,
+            'event_name': registration.event.name,
+            'email': registration.email,
+            'status': registration.status,
+            'screenshot_url': registration.screenshot_url,
+            'timestamp': registration.timestamp.isoformat(),
+            'responses': response_data
+        }
+        
+        return jsonify(registration_data), 200
+        
+    except Exception as e:
+        print(f"Error fetching registration details: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500

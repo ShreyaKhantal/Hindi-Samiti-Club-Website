@@ -527,7 +527,6 @@ const EventsSection = () => {
                         className="w-full p-2 border rounded-md"
                       >
                         <option value="text">Text</option>
-                        <option value="email">Email</option>
                         <option value="number">Number</option>
                         <option value="image">Image Upload</option>
                       </select>

@@ -10,7 +10,7 @@ const EventDetails = () => {
   const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+  const [showRegistrationForm, setShowRegistrationForm] = useState(true);
   const [registrationStatus, setRegistrationStatus] = useState(null);
   const [email, setEmail] = useState('');
 
@@ -53,8 +53,14 @@ const EventDetails = () => {
     return new Date(dateString).toLocaleDateString('en-IN', options);
   };
 
-  const isEventActive = () => {
-    if (!event || !event.is_active) return false;
+  // Check if registrations are open (is_active = true)
+  const isRegistrationOpen = () => {
+    return event && Boolean(event.is_active);
+  };
+
+  // Check if event date has passed
+  const isEventDatePassed = () => {
+    if (!event) return false;
     
     const today = new Date();
     const eventDate = new Date(event.date);
@@ -63,7 +69,7 @@ const EventDetails = () => {
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
     
-    return eventDate >= today;
+    return eventDate < today;
   };
 
   const getStatusBadge = () => {
@@ -89,6 +95,12 @@ const EventDetails = () => {
       default:
         return null;
     }
+  };
+
+  const handleRegistrationSubmit = (registrationData) => {
+    // Handle successful registration submission
+    setRegistrationStatus('pending');
+    setShowRegistrationForm(false);
   };
 
   if (loading) {
@@ -121,7 +133,8 @@ const EventDetails = () => {
     );
   }
 
-  const eventActive = isEventActive();
+  const registrationOpen = isRegistrationOpen();
+  const eventDatePassed = isEventDatePassed();
 
   return (
     <div className="bg-gradient-to-b from-orange-50 to-amber-50 min-h-screen">
@@ -160,10 +173,17 @@ const EventDetails = () => {
                   </svg>
                   <span>{formatDate(event.date)}</span>
                 </div>
-                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  eventActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {eventActive ? 'Active' : 'Completed'}
+                <div className="flex gap-2">
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    registrationOpen ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {registrationOpen ? 'Registration Open' : 'Registration Closed'}
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                    eventDatePassed ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {eventDatePassed ? 'Past Event' : 'Upcoming Event'}
+                  </div>
                 </div>
               </div>
               <div className="prose max-w-none text-gray-700">
@@ -171,14 +191,17 @@ const EventDetails = () => {
               </div>
             </div>
 
-            {eventActive ? (
+            {registrationOpen ? (
               <div className="mt-10 p-6 bg-orange-50 rounded-lg border border-orange-200">
                 <h2 className="text-2xl font-bold text-orange-800 mb-4 font-serif">Registration</h2>
                 
                 {registrationStatus ? (
                   getStatusBadge()
                 ) : showRegistrationForm ? (
-                  <RegistrationForm eventId={eventId} formFields={event.form_fields} />
+                  <RegistrationForm 
+                    event={event} 
+                    onSubmit={handleRegistrationSubmit} 
+                  />
                 ) : (
                   <form onSubmit={handleEmailCheck} className="mb-6">
                     <div className="mb-4">
@@ -204,13 +227,14 @@ const EventDetails = () => {
               </div>
             ) : (
               <div className="mt-10 p-6 bg-gray-50 rounded-lg border border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4 font-serif">Event Completed</h2>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4 font-serif">Registration Closed</h2>
                 <p className="text-gray-700 mb-6">
-                  This event has concluded. Thank you to all participants who joined us!
+                  Registration for this event is currently closed.
+                  {eventDatePassed && " This event has already concluded."}
                 </p>
                 
-                {/* If there are event images, show them here */}
-                {event.images && event.images.length > 0 && (
+                {/* If the event has passed and there are event images, show them here */}
+                {eventDatePassed && event.images && event.images.length > 0 && (
                   <div className="mt-6">
                     <h3 className="text-xl font-semibold text-gray-800 mb-4">Event Gallery</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -227,8 +251,8 @@ const EventDetails = () => {
                   </div>
                 )}
                 
-                {/* Display total participants if available */}
-                {event.total_participants && (
+                {/* Display total participants if available and event has passed */}
+                {eventDatePassed && event.total_participants && (
                   <div className="mt-6 text-center">
                     <p className="text-lg font-medium">
                       Total Participants: <span className="text-orange-600 font-bold">{event.total_participants}</span>
