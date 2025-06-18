@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import logo from '../assets/react.svg';
+import logo from '../assets/logo.png'; // Adjust the path as necessary
 
 const Navbar = () => {
   const [activeSection, setActiveSection] = useState('home');
