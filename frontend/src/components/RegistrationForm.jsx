@@ -141,7 +141,7 @@ const RegistrationForm = ({ event, onSubmit }) => {
     
     try {
       // Validate screenshot file again before upload
-      if (!screenshot || !screenshot instanceof File) {
+      if (!screenshot || !(screenshot instanceof File)) {
         setErrors({ submit: 'Invalid screenshot file. Please select a valid image file.' });
         setLoading(false);
         return;

@@ -255,4 +255,29 @@ export const getApiBaseUrl = () => {
   return API_BASE_URL;
 };
 
+export const viewScreenshot = async (registrationId) => {
+  const token = localStorage.getItem('authToken'); // or 'adminToken' if that's your storage key
+
+  if (!token) {
+    throw new Error('You are not authorized to view the screenshot.');
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/admin/registrations/${registrationId}/screenshot`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to load screenshot');
+  }
+
+  const blob = await response.blob();
+  const imageUrl = URL.createObjectURL(blob);
+  return imageUrl;
+};
+
+
 export default api;

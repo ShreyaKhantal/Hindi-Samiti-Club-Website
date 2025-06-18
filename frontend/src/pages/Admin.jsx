@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { fetchIntro, updateIntro, fetchImages, uploadImage, deleteImage, 
          fetchEvents, createEvent, updateEvent, deleteEvent, 
          fetchRegistrations, updateRegistrationStatus, downloadRegistrationsExcel,
-         fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember } from '../utils/api';
+         fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember,
+         viewScreenshot } from '../utils/api';
 import { checkAuth, logout } from '../utils/auth';
 
 const Admin = () => {
@@ -83,6 +84,234 @@ const Admin = () => {
         {activeTab === 'events' && <EventsSection />}
         {activeTab === 'registrations' && <RegistrationsSection />}
         {activeTab === 'team' && <TeamSection />}
+      </div>
+    </div>
+  );
+};
+
+// Registrations Management Section
+const RegistrationsSection = () => {
+  const [events, setEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState('');
+  const [registrations, setRegistrations] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState({ text: '', type: '' });
+  
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const eventsData = await fetchEvents();
+        setEvents(eventsData);
+        
+        // Select first event by default if available
+        if (eventsData.length > 0) {
+          setSelectedEventId(eventsData[0].id);
+        }
+      } catch (error) {
+        setMessage({ text: 'Failed to load events', type: 'error' });
+      }
+    };
+    
+    loadEvents();
+  }, []);
+  
+  useEffect(() => {
+    if (selectedEventId) {
+      loadRegistrations();
+    }
+  }, [selectedEventId]);
+  
+  const loadRegistrations = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchRegistrations(selectedEventId);
+      setRegistrations(data);
+    } catch (error) {
+      setMessage({ text: 'Failed to load registrations', type: 'error' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleEventChange = (e) => {
+    setSelectedEventId(e.target.value);
+  };
+  
+  const handleStatusChange = async (registrationId, newStatus) => {
+    try {
+      await updateRegistrationStatus(registrationId, newStatus);
+      
+      // Update local state
+      setRegistrations(registrations.map(reg => 
+        reg.id === registrationId ? { ...reg, status: newStatus } : reg
+      ));
+      
+      setMessage({ text: '登記狀態已更新', type: 'success' });
+    } catch (error) {
+      setMessage({ text: '無法更新登記狀態', type: 'error' });
+    }
+  };
+  
+  const handleDownloadExcel = async () => {
+    try {
+      await downloadRegistrationsExcel(selectedEventId);
+      setMessage({ text: 'Excel 下載已開始', type: 'success' });
+    } catch (error) {
+      setMessage({ text: '無法下載 Excel', type: 'error' });
+    }
+  };
+  
+const handleViewScreenshot = async (registrationId) => {
+  try {
+    const url = await viewScreenshot(registrationId);
+    window.open(url, '_blank');
+  } catch (error) {
+    alert(error.message);
+  }
+};
+
+  
+  return (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-bold">Registration Management</h2>
+      
+      {message.text && (
+        <div className={`p-4 rounded-md ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+          {message.text}
+ dubbing
+        </div>
+      )}
+      
+      <div className="bg-white p-6 rounded-lg shadow-md">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+          <div className="mb-4 md:mb-0">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Select Event
+            </label>
+            <select
+              value={selectedEventId}
+              onChange={handleEventChange}
+              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
+            >
+              {events.map(event => (
+                <option key={event.id} value={event.id}>{event.name}</option>
+              ))}
+            </select>
+          </div>
+          
+          {selectedEventId && (
+            <button
+              onClick={handleDownloadExcel}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            >
+              Download Excel
+            </button>
+          )}
+        </div>
+        
+        {isLoading ? (
+          <div className="text-center py-6">Loading registrations...</div>
+        ) : registrations.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Timestamp
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Payment Screenshot
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {registrations.map((registration) => (
+                  <tr key={registration.id}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {registration.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(registration.timestamp).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        ${registration.status === 'verified' 
+                          ? 'bg-green-100 text-green-800' 
+                          : registration.status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {registration.status.charAt(0).toUpperCase() + registration.status.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {registration.screenshot_url && (
+                        <button
+                          onClick={() => handleViewScreenshot(registration.id)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          View Screenshot
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleStatusChange(registration.id, 'verified')}
+                          disabled={registration.status === 'verified'}
+                          className={`px-2 py-1 rounded-md ${
+                            registration.status === 'verified'
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-green-100 text-green-800 hover:bg-green-200'
+                          }`}
+                        >
+                          Verify
+                        </button>
+                        
+                        <button
+                          onClick={() => handleStatusChange(registration.id, 'rejected')}
+                          disabled={registration.status === 'rejected'}
+                          className={`px-2 py-1 rounded-md ${
+                            registration.status === 'rejected'
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-red-100 text-red-800 hover:bg-red-200'
+                          }`}
+                        >
+                          Reject
+                        </button>
+                        
+                        <button
+                          onClick={() => handleStatusChange(registration.id, 'pending')}
+                          disabled={registration.status === 'pending'}
+                          className={`px-2 py-1 rounded-md ${
+                            registration.status === 'pending'
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                          }`}
+                        >
+                          Mark Pending
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-500">
+            No registrations found for this event.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -643,224 +872,6 @@ const EventsSection = () => {
   );
 };
 
-// Registrations Management Section
-const RegistrationsSection = () => {
-  const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState('');
-  const [registrations, setRegistrations] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
-  
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const eventsData = await fetchEvents();
-        setEvents(eventsData);
-        
-        // Select first event by default if available
-        if (eventsData.length > 0) {
-          setSelectedEventId(eventsData[0].id);
-        }
-      } catch (error) {
-        setMessage({ text: 'Failed to load events', type: 'error' });
-      }
-    };
-    
-    loadEvents();
-  }, []);
-  
-  useEffect(() => {
-    if (selectedEventId) {
-      loadRegistrations();
-    }
-  }, [selectedEventId]);
-  
-  const loadRegistrations = async () => {
-    try {
-      setIsLoading(true);
-      const data = await fetchRegistrations(selectedEventId);
-      setRegistrations(data);
-    } catch (error) {
-      setMessage({ text: 'Failed to load registrations', type: 'error' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  const handleEventChange = (e) => {
-    setSelectedEventId(e.target.value);
-  };
-  
-  const handleStatusChange = async (registrationId, newStatus) => {
-    try {
-      await updateRegistrationStatus(registrationId, newStatus);
-      
-      // Update local state
-      setRegistrations(registrations.map(reg => 
-        reg.id === registrationId ? { ...reg, status: newStatus } : reg
-      ));
-      
-      setMessage({ text: 'Registration status updated', type: 'success' });
-    } catch (error) {
-      setMessage({ text: 'Failed to update status', type: 'error' });
-    }
-  };
-  
-  const handleDownloadExcel = async () => {
-    try {
-      await downloadRegistrationsExcel(selectedEventId);
-      setMessage({ text: 'Excel download initiated', type: 'success' });
-    } catch (error) {
-      setMessage({ text: 'Failed to download Excel', type: 'error' });
-    }
-  };
-  
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Registration Management</h2>
-      
-      {message.text && (
-        <div className={`p-4 rounded-md ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-          {message.text}
-        </div>
-      )}
-      
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
-          <div className="mb-4 md:mb-0">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Select Event
-            </label>
-            <select
-              value={selectedEventId}
-              onChange={handleEventChange}
-              className="rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-            >
-              {events.map(event => (
-                <option key={event.id} value={event.id}>{event.name}</option>
-              ))}
-            </select>
-          </div>
-          
-          {selectedEventId && (
-            <button
-              onClick={handleDownloadExcel}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              Download Excel
-            </button>
-          )}
-        </div>
-        
-        {isLoading ? (
-          <div className="text-center py-6">Loading registrations...</div>
-        ) : registrations.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Timestamp
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Payment Screenshot
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {registrations.map((registration) => (
-                  <tr key={registration.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {registration.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(registration.timestamp).toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                        ${registration.status === 'verified' 
-                          ? 'bg-green-100 text-green-800' 
-                          : registration.status === 'rejected'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {registration.status.charAt(0).toUpperCase() + registration.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {registration.screenshot_url && (
-                        <a 
-                          href={registration.screenshot_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:text-indigo-900"
-                        >
-                          View Screenshot
-                        </a>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleStatusChange(registration.id, 'verified')}
-                          disabled={registration.status === 'verified'}
-                          className={`px-2 py-1 rounded-md ${
-                            registration.status === 'verified'
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-green-100 text-green-800 hover:bg-green-200'
-                          }`}
-                        >
-                          Verify
-                        </button>
-                        
-                        <button
-                          onClick={() => handleStatusChange(registration.id, 'rejected')}
-                          disabled={registration.status === 'rejected'}
-                          className={`px-2 py-1 rounded-md ${
-                            registration.status === 'rejected'
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-red-100 text-red-800 hover:bg-red-200'
-                          }`}
-                        >
-                          Reject
-                        </button>
-                        
-                        <button
-                          onClick={() => handleStatusChange(registration.id, 'pending')}
-                          disabled={registration.status === 'pending'}
-                          className={`px-2 py-1 rounded-md ${
-                            registration.status === 'pending'
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                          }`}
-                        >
-                          Mark Pending
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="text-center py-6 text-gray-500">
-            No registrations found for this event.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // Team Management Section
 const TeamSection = () => {

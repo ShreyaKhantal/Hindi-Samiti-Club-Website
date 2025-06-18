@@ -20,6 +20,7 @@ import jwt as pyjwt
 import os
 from io import BytesIO
 import uuid
+import mimetypes
 
 # Import your models
 from models import db, Admin, Image, Intro, Event, EventFormField, Registration, RegistrationFieldResponse, TeamMember
@@ -513,7 +514,6 @@ def get_registrations(current_admin, event_id):
     try:
         registrations = Registration.query.filter_by(event_id=event_id).order_by(Registration.timestamp.desc()).all()
         registrations_data = []
-        print(event_id)
         for reg in registrations:
             responses = {}
             for response in reg.responses:
@@ -529,7 +529,6 @@ def get_registrations(current_admin, event_id):
                 'timestamp': reg.timestamp.isoformat() if reg.timestamp else None,
                 'responses': responses
             })
-            print(registrations_data)
         return jsonify(registrations_data), 200
     except Exception as e:
         print(f"Error in get_registrations: {str(e)}")
@@ -555,62 +554,6 @@ def update_registration_status(current_admin, registration_id):
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
 
-@route.route('/api/admin/registrations/<int:event_id>/download', methods=['GET'])
-@token_required
-def download_registrations_excel(current_admin, event_id):
-    try:
-        event = Event.query.get_or_404(event_id)
-        registrations = Registration.query.filter_by(event_id=event_id).all()
-        
-        if not registrations:
-            return jsonify({'message': 'No registrations found'}), 404
-        
-        # Prepare data for Excel
-        data = []
-        
-        # Get all form fields for this event
-        form_fields = EventFormField.query.filter_by(event_id=event_id).order_by(EventFormField.order).all()
-        
-        for reg in registrations:
-            row = {
-                'Registration ID': reg.id,
-                'Email': reg.email,
-                'Status': reg.status,
-                'Timestamp': reg.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                'Screenshot URL': reg.screenshot_url or ''
-            }
-            
-            # Add form field responses
-            for field in form_fields:
-                response = RegistrationFieldResponse.query.filter_by(
-                    registration_id=reg.id, 
-                    field_id=field.id
-                ).first()
-                row[field.label] = response.value if response else ''
-            
-            data.append(row)
-        
-        # Create Excel file
-        df = pd.DataFrame(data)
-        
-        # Create BytesIO object to store Excel file in memory
-        excel_buffer = BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Registrations')
-        
-        excel_buffer.seek(0)
-        
-        filename = f"{event.name}_registrations_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        
-        return send_file(
-            excel_buffer,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        
-    except Exception as e:
-        return jsonify({'message': str(e)}), 500
 
 # ==================== ADMIN TEAM ROUTES ====================
 
@@ -1085,3 +1028,210 @@ def get_registration_details(registration_id):
     except Exception as e:
         print(f"Error fetching registration details: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+    
+# Fixed Backend Route
+@route.route('/api/admin/registrations/<int:registration_id>/screenshot', methods=['GET'])
+@token_required
+def view_screenshot(current_admin, registration_id):
+    try:
+        # Query the registration by ID
+        registration = Registration.query.filter_by(id=registration_id).first()
+        if not registration:
+            return jsonify({'message': 'Registration not found'}), 404
+            
+        if not registration.screenshot_url:
+            return jsonify({'message': 'No screenshot available for this registration'}), 404
+            
+        # FIXED: Better file path construction
+        # Get the uploads directory (should be consistent with where files are saved)
+        uploads_dir = os.path.join(os.path.dirname(__file__), 'uploads', 'screenshots')
+        
+        # Handle different URL formats that might be stored in database
+        if registration.screenshot_url.startswith('/uploads/'):
+            # URL format: /uploads/screenshots/filename.jpg
+            filename = os.path.basename(registration.screenshot_url)
+        elif registration.screenshot_url.startswith('uploads/'):
+            # Path format: uploads/screenshots/filename.jpg
+            filename = os.path.basename(registration.screenshot_url)
+        else:
+            # Just filename: filename.jpg
+            filename = registration.screenshot_url
+            
+        file_path = os.path.join(uploads_dir, filename)
+        
+        print(f"Registration ID: {registration_id}")  # Debug
+        print(f"Screenshot URL in DB: {registration.screenshot_url}")  # Debug
+        print(f"Constructed file path: {file_path}")  # Debug
+        print(f"File exists: {os.path.exists(file_path)}")  # Debug
+        
+        if not os.path.exists(file_path):
+            # FIXED: Also check if file exists with different extensions
+            possible_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+            base_filename = os.path.splitext(filename)[0]
+            
+            found_file = None
+            for ext in possible_extensions:
+                test_path = os.path.join(uploads_dir, base_filename + ext)
+                if os.path.exists(test_path):
+                    found_file = test_path
+                    break
+                    
+            if not found_file:
+                print(f"File not found at: {file_path}")  # Debug
+                print(f"Directory contents: {os.listdir(uploads_dir) if os.path.exists(uploads_dir) else 'Directory does not exist'}")  # Debug
+                return jsonify({'message': 'Screenshot file not found on server'}), 404
+            
+            file_path = found_file
+            
+        # Determine MIME type dynamically
+        mimetype, _ = mimetypes.guess_type(file_path)
+        if not mimetype:
+            mimetype = 'image/png'  # Fallback
+            
+        # FIXED: Add proper headers for browser display
+        response = send_file(
+            file_path,
+            mimetype=mimetype,
+            as_attachment=False
+        )
+        
+        # Add headers to ensure proper display in browser
+        response.headers['Content-Disposition'] = 'inline'
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error in view_screenshot: {str(e)}")
+        import traceback
+        traceback.print_exc()  # Print full traceback for debugging
+        return jsonify({'message': f'Failed to retrieve screenshot: {str(e)}'}), 500
+
+
+
+@route.route('/admin/registrations/<int:event_id>/download', methods=['GET'])
+@token_required
+def download_registrations_excel(event_id):
+    """
+    Download all registrations for an event as Excel file
+    """
+    try:
+        # Check if event exists
+        event = Event.query.get_or_404(event_id)
+        
+        # Get all registrations for the event
+        registrations = Registration.query.filter_by(event_id=event_id).all()
+        
+        if not registrations:
+            return jsonify({'error': 'No registrations found for this event'}), 404
+        
+        # Get all form fields for the event
+        form_fields = EventFormField.query.filter_by(event_id=event_id).order_by(EventFormField.order).all()
+        
+        # Prepare data for Excel
+        excel_data = []
+        
+        for registration in registrations:
+            row_data = {
+                'ID': registration.id,
+                'Email': registration.email,
+                'Status': registration.status,
+                'Registration Date': registration.timestamp.strftime('%Y-%m-%d %H:%M:%S') if registration.timestamp else '',
+                'Screenshot URL': registration.screenshot_url or ''
+            }
+            
+            # Add form field responses
+            response_dict = {resp.field_id: resp.value for resp in registration.responses if resp.field}
+            
+            for field in form_fields:
+                row_data[field.label] = response_dict.get(field.id, '')
+            
+            excel_data.append(row_data)
+        
+        # Create DataFrame
+        df = pd.DataFrame(excel_data)
+        
+        # Create Excel file in memory
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Write main data
+            df.to_excel(writer, sheet_name='Registrations', index=False)
+            
+            # Get the workbook and worksheet
+            workbook = writer.book
+            worksheet = writer.sheets['Registrations']
+            
+            # Auto-adjust column widths
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                
+                adjusted_width = min(max_length + 2, 50)  # Cap at 50 characters
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+            
+            # Add summary sheet
+            summary_data = {
+                'Metric': [
+                    'Event Name',
+                    'Total Registrations',
+                    'Pending Registrations',
+                    'Verified Registrations',
+                    'Rejected Registrations',
+                    'Export Date'
+                ],
+                'Value': [
+                    event.name,
+                    len(registrations),
+                    len([r for r in registrations if r.status == 'pending']),
+                    len([r for r in registrations if r.status == 'verified']),
+                    len([r for r in registrations if r.status == 'rejected']),
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                ]
+            }
+            
+            summary_df = pd.DataFrame(summary_data)
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+            
+            # Auto-adjust summary sheet columns
+            summary_worksheet = writer.sheets['Summary']
+            for column in summary_worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                
+                adjusted_width = max_length + 2
+                summary_worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        output.seek(0)
+        
+        # Generate filename
+        safe_event_name = "".join(c for c in event.name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{safe_event_name}_registrations_{timestamp}.xlsx"
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        print(f"Error downloading registrations: {str(e)}")
+        return jsonify({'error': 'Failed to generate Excel file'}), 500
