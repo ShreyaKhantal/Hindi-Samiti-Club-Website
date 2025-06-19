@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import RegistrationForm from '../components/RegistrationForm';
@@ -7,7 +8,6 @@ import { fetchPublicEventDetails } from '../utils/api';
 
 const EventDetails = () => {
   const { eventId } = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,12 +35,11 @@ const EventDetails = () => {
     e.preventDefault();
     
     try {
-      // API call to check if email exists for this event
       const response = await fetch(`/api/events/${eventId}/check-registration?email=${encodeURIComponent(email)}`);
       const data = await response.json();
       
       if (data.exists) {
-        setRegistrationStatus(data.status); // 'pending', 'verified', or 'rejected'
+        setRegistrationStatus(data.status);
       } else {
         setShowRegistrationForm(true);
       }
@@ -54,19 +53,16 @@ const EventDetails = () => {
     return new Date(dateString).toLocaleDateString('en-IN', options);
   };
 
-  // Check if registrations are open (is_active = true)
   const isRegistrationOpen = () => {
     return event && Boolean(event.is_active);
   };
 
-  // Check if event date has passed
   const isEventDatePassed = () => {
     if (!event) return false;
     
     const today = new Date();
     const eventDate = new Date(event.date);
     
-    // Reset time to compare only dates
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
     
@@ -99,29 +95,8 @@ const EventDetails = () => {
   };
 
   const handleRegistrationSubmit = (registrationData) => {
-    // Handle successful registration submission
     setRegistrationStatus('pending');
     setShowRegistrationForm(false);
-  };
-
-  // Improved back navigation function
-  const handleBackNavigation = () => {
-    const state = location.state;
-    
-    if (state && state.from === 'home') {
-      // If we came from home, navigate back to home and scroll to events section
-      navigate('/');
-      // Use setTimeout to ensure navigation completes before scrolling
-      setTimeout(() => {
-        const eventsSection = document.getElementById('events');
-        if (eventsSection) {
-          eventsSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      }, 100);
-    } else {
-      // Otherwise, go to the events page
-      navigate('/events');
-    }
   };
 
   if (loading) {
@@ -142,12 +117,15 @@ const EventDetails = () => {
         <Navbar />
         <div className="container mx-auto px-4 py-20 text-center">
           <h2 className="text-2xl text-gray-700 mb-6">Event not found</h2>
-          <button 
-            onClick={() => navigate('/events')}
-            className="px-6 py-2 bg-orange-600 text-white rounded-full hover:bg-orange-700 transition-colors"
-          >
-            Back to Events
-          </button>
+          <Link to="/events">
+            <motion.button
+              whileHover={{ scale: 1.05, backgroundColor: '#7C2D12' }}
+              whileTap={{ scale: 0.95 }}
+              className="bg-orange-700 text-yellow-200 px-6 py-2 rounded-full hover:bg-orange-800 transition-all"
+            >
+              Back to Events
+            </motion.button>
+          </Link>
         </div>
         <Footer />
       </div>
@@ -162,15 +140,18 @@ const EventDetails = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 py-12">
-        <button 
-          onClick={handleBackNavigation}
-          className="mb-6 flex items-center text-orange-700 hover:text-orange-900 transition-colors"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-          </svg>
-          Back
-        </button>
+        <Link to="/events">
+          <motion.button
+            whileHover={{ scale: 1.05, backgroundColor: '#7C2D12' }}
+            whileTap={{ scale: 0.95 }}
+            className="mt-6 mb-6 flex items-center bg-orange-700 text-yellow-200 px-4 py-2 rounded-md hover:bg-orange-800 transition-all"
+          >
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+            Back to Events
+          </motion.button>
+        </Link>
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           {event.cover_image_url && (
@@ -190,7 +171,7 @@ const EventDetails = () => {
               <div className="flex items-center mb-6">
                 <div className="flex items-center text-orange-600 mr-6">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"></path>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                   </svg>
                   <span>{formatDate(event.date)}</span>
                 </div>
@@ -254,7 +235,6 @@ const EventDetails = () => {
                   {eventDatePassed && " This event has already concluded."}
                 </p>
                 
-                {/* If the event has passed and there are event images, show them here */}
                 {eventDatePassed && event.images && event.images.length > 0 && (
                   <div className="mt-6">
                     <h3 className="text-xl font-semibold text-gray-800 mb-4">Event Gallery</h3>
@@ -272,7 +252,6 @@ const EventDetails = () => {
                   </div>
                 )}
                 
-                {/* Display total participants if available and event has passed */}
                 {eventDatePassed && event.total_participants && (
                   <div className="mt-6 text-center">
                     <p className="text-lg font-medium">
