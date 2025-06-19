@@ -4,7 +4,7 @@ import csv
 from datetime import datetime
 import io
 from flask import current_app
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, abort
 from sqlalchemy import extract, func
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -1235,3 +1235,64 @@ def download_registrations_excel(event_id):
     except Exception as e:
         print(f"Error downloading registrations: {str(e)}")
         return jsonify({'error': 'Failed to generate Excel file'}), 500
+
+@route.route('/api/admin/registrations/<int:event_id>/download', methods=['GET'])
+@token_required
+def download_registrations_csv(current_admin, event_id):
+    # Fetch the event
+    event = Event.query.get(event_id)
+    if not event:
+        abort(404, description="Event not found")
+    
+    # Fetch form fields for the event, ordered by 'order'
+    form_fields = EventFormField.query.filter_by(event_id=event_id).order_by(EventFormField.order).all()
+    
+    # Fetch registrations for the specified event
+    registrations = Registration.query.filter_by(event_id=event_id).all()
+    
+    # Create CSV headers: base fields + dynamic form fields
+    base_headers = ['Email', 'Timestamp', 'Status', 'Screenshot URL']
+    dynamic_headers = [field.label for field in form_fields]
+    headers = base_headers + dynamic_headers
+    
+    # Create a CSV file in memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    writer.writerow(headers)
+    
+    # Write registration data
+    for registration in registrations:
+        # Fetch responses for this registration
+        responses = RegistrationFieldResponse.query.filter_by(registration_id=registration.id).all()
+        # Create a dictionary for quick lookup of response values by field_id
+        response_dict = {response.field_id: response.value for response in responses}
+        
+        # Prepare base fields
+        row = [
+            registration.email,
+            registration.timestamp.strftime('%Y-%m-%d %H:%M:%S') if registration.timestamp else 'N/A',
+            registration.status,
+            registration.screenshot_url if registration.screenshot_url else 'N/A'
+        ]
+        
+        # Append dynamic field responses in the order of form_fields
+        for field in form_fields:
+            row.append(response_dict.get(field.id, 'N/A'))
+        
+        writer.writerow(row)
+    
+    # Convert string data to bytes
+    output_bytes = io.BytesIO(output.getvalue().encode('utf-8'))
+    output_bytes.seek(0)
+    
+    # Generate filename with event ID and current date
+    filename = f'registrations_event_{event_id}_{datetime.now().strftime("%Y%m%d")}.csv'
+    
+    return send_file(
+        output_bytes,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )

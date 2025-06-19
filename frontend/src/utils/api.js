@@ -177,15 +177,14 @@ export const downloadRegistrationsExcel = async (eventId) => {
       responseType: 'blob'
     });
 
-    // Create blob URL and trigger download
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;
     
-    // Try to get filename from response headers, fallback to default
-    const contentDisposition = response.headers['content-disposition'];
-    let filename = `registrations-event-${eventId}.xlsx`;
+    // Default to CSV extension
+    let filename = `registrations_event_${eventId}_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.csv`;
     
+    const contentDisposition = response.headers['content-disposition'];
     if (contentDisposition) {
       const matches = /filename="([^"]*)"/.exec(contentDisposition);
       if (matches != null && matches[1]) {

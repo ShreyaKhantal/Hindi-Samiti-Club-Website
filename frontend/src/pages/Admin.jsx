@@ -146,18 +146,18 @@ const RegistrationsSection = () => {
         reg.id === registrationId ? { ...reg, status: newStatus } : reg
       ));
       
-      setMessage({ text: '登記狀態已更新', type: 'success' });
+      setMessage({ text: 'Done', type: 'success' });
     } catch (error) {
-      setMessage({ text: '無法更新登記狀態', type: 'error' });
+      setMessage({ text: 'Server Error', type: 'error' });
     }
   };
   
   const handleDownloadExcel = async () => {
     try {
       await downloadRegistrationsExcel(selectedEventId);
-      setMessage({ text: 'Excel 下載已開始', type: 'success' });
+      setMessage({ text: 'Excel downloaded', type: 'success' });
     } catch (error) {
-      setMessage({ text: '無法下載 Excel', type: 'error' });
+      setMessage({ text: 'Error downloading Excel', type: 'error' });
     }
   };
   
@@ -178,7 +178,6 @@ const handleViewScreenshot = async (registrationId) => {
       {message.text && (
         <div className={`p-4 rounded-md ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
           {message.text}
- dubbing
         </div>
       )}
       
