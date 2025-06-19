@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import logo from '../assets/logo.png'; // Adjust the path as necessary
 
 const Navbar = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [scrolled, setScrolled] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -16,28 +17,56 @@ const Navbar = () => {
         setScrolled(false);
       }
 
-      // For active section highlighting
-      const sections = ['home', 'about', 'events', 'team', 'contact'];
-      for (const section of sections.reverse()) {
-        const element = document.getElementById(section);
-        if (element && window.scrollY >= element.offsetTop - 100) {
-          setActiveSection(section);
-          break;
+      // Only handle section scrolling on home page
+      if (location.pathname === '/') {
+        const sections = ['home', 'about', 'events', 'team', 'contact'];
+        for (const section of sections.reverse()) {
+          const element = document.getElementById(section);
+          if (element && window.scrollY >= element.offsetTop - 100) {
+            setActiveSection(section);
+            break;
+          }
         }
       }
     };
 
+    // Set active section based on current route
+    if (location.pathname === '/') {
+      // Handle hash navigation on home page
+      if (location.hash) {
+        const section = location.hash.replace('#', '');
+        setActiveSection(section);
+      } else {
+        setActiveSection('home');
+      }
+    } else if (location.pathname === '/events' || location.pathname.startsWith('/events/')) {
+      setActiveSection('events');
+    } else {
+      setActiveSection('home');
+    }
+
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [location]);
 
   const navItems = [
-    { name: 'Home', link: '#home', section: 'home' },
-    { name: 'About', link: '#about', section: 'about' },
-    { name: 'Events', link: '#events', section: 'events' },
-    { name: 'Team', link: '#team', section: 'team' },
-    { name: 'Contact', link: '#contact', section: 'contact' },
+    { name: 'Home', link: '/', section: 'home' },
+    { name: 'About', link: '/#about', section: 'about' },
+    { name: 'Events', link: '/#events', section: 'events' },
+    { name: 'Team', link: '/#team', section: 'team' },
+    { name: 'Contact', link: '/#contact', section: 'contact' },
   ];
+
+  const handleNavClick = (item) => {
+    if (item.section === 'home') {
+      // For home, navigate to root
+      window.location.href = '/';
+    } else if (location.pathname !== '/') {
+      // If not on home page, navigate to home with hash
+      window.location.href = item.link;
+    }
+    // If already on home page, let the default Link behavior handle it
+  };
 
   return (
     <nav 
@@ -52,15 +81,19 @@ const Navbar = () => {
           transition={{ duration: 0.5 }}
           className="flex items-center"
         >
-          <img src={logo} alt="Hindi Samiti Logo" className="h-12 mr-3" />
-          <h1 className="text-xl font-bold text-yellow-300 hidden md:block">हिंदी समिति</h1>
+          <Link to="/" className="flex items-center">
+            <img src={logo} alt="Hindi Samiti Logo" className="h-12 mr-3" />
+            <h1 className="text-xl font-bold text-yellow-300 hidden md:block">हिंदी समिति</h1>
+          </Link>
         </motion.div>
 
+        {/* Desktop Navigation */}
         <div className="hidden md:flex space-x-6">
           {navItems.map((item) => (
             <motion.a
               key={item.section}
               href={item.link}
+              onClick={() => handleNavClick(item)}
               className={`text-lg font-medium transition-all duration-300 hover:text-yellow-300 ${
                 activeSection === item.section 
                   ? 'text-yellow-300 border-b-2 border-yellow-300' 
@@ -76,14 +109,18 @@ const Navbar = () => {
             <motion.button
               whileHover={{ scale: 1.05, backgroundColor: '#7C2D12' }}
               whileTap={{ scale: 0.95 }}
-              className="bg-orange-700 text-yellow-200 px-4 py-1 rounded-md hover:bg-orange-800 transition-all"
+              className={`bg-orange-700 text-yellow-200 px-4 py-1 rounded-md hover:bg-orange-800 transition-all ${
+                location.pathname === '/events' || location.pathname.startsWith('/events/') 
+                  ? 'ring-2 ring-yellow-300' 
+                  : ''
+              }`}
             >
               All Events
             </motion.button>
           </Link>
         </div>
         
-        {/* Mobile menu */}
+        {/* Mobile menu button */}
         <div className="md:hidden">
           <motion.button
             whileTap={{ scale: 0.95 }}
@@ -101,10 +138,13 @@ const Navbar = () => {
           <a
             key={item.section}
             href={item.link}
+            onClick={() => {
+              handleNavClick(item);
+              document.getElementById('mobileMenu').classList.add('hidden');
+            }}
             className={`block py-2 px-4 text-lg ${
               activeSection === item.section ? 'text-yellow-300' : 'text-white'
             }`}
-            onClick={() => document.getElementById('mobileMenu').classList.add('hidden')}
           >
             {item.name}
           </a>

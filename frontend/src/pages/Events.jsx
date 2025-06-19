@@ -28,6 +28,7 @@ const Events = () => {
   }, []);
 
   const handleEventClick = (eventId) => {
+    // Navigate without state since we're coming from events page
     navigate(`/events/${eventId}`);
   };
 

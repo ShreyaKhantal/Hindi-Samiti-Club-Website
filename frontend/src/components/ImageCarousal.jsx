@@ -72,13 +72,12 @@ const ImageCarousel = ({ images }) => {
 
   return (
     <div className="relative w-full h-screen overflow-hidden">
-      {/* DEBUG: Show current image info */}
-      <div className="absolute top-16 left-4 bg-black bg-opacity-75 text-white p-3 rounded z-50 text-sm">
+      {/* <div className="absolute top-16 left-4 bg-black bg-opacity-75 text-white p-3 rounded z-50 text-sm">
         <div>Current: {currentIndex + 1}/{displayImages.length}</div>
         <div>URL: {displayImages[currentIndex]?.url?.substring(0, 50)}...</div>
         <div>Status: {imageLoadStatus[currentIndex] || 'loading'}</div>
         <div>Using: {images && images.length > 0 ? 'API Images' : 'Default Images'}</div>
-      </div>
+      </div> */}
 
       {/* Main image */}
       {displayImages.map((image, index) => (

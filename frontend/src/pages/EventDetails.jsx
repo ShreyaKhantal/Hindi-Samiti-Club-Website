@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import RegistrationForm from '../components/RegistrationForm';
@@ -8,6 +8,7 @@ import { fetchPublicEventDetails } from '../utils/api';
 const EventDetails = () => {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showRegistrationForm, setShowRegistrationForm] = useState(true);
@@ -103,6 +104,26 @@ const EventDetails = () => {
     setShowRegistrationForm(false);
   };
 
+  // Improved back navigation function
+  const handleBackNavigation = () => {
+    const state = location.state;
+    
+    if (state && state.from === 'home') {
+      // If we came from home, navigate back to home and scroll to events section
+      navigate('/');
+      // Use setTimeout to ensure navigation completes before scrolling
+      setTimeout(() => {
+        const eventsSection = document.getElementById('events');
+        if (eventsSection) {
+          eventsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      // Otherwise, go to the events page
+      navigate('/events');
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-gradient-to-b from-orange-50 to-amber-50 min-h-screen">
@@ -142,13 +163,13 @@ const EventDetails = () => {
       
       <div className="container mx-auto px-4 py-12">
         <button 
-          onClick={() => navigate('/events')}
+          onClick={handleBackNavigation}
           className="mb-6 flex items-center text-orange-700 hover:text-orange-900 transition-colors"
         >
           <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
           </svg>
-          Back to Events
+          Back
         </button>
 
         <div className="bg-white rounded-lg shadow-lg overflow-hidden">
@@ -169,7 +190,7 @@ const EventDetails = () => {
               <div className="flex items-center mb-6">
                 <div className="flex items-center text-orange-600 mr-6">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z"></path>
                   </svg>
                   <span>{formatDate(event.date)}</span>
                 </div>

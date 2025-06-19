@@ -20,18 +20,12 @@ const HomeSection = () => {
         // Fetch both intro and images concurrently
         const [introResponse, imagesResponse] = await Promise.all([
           fetchPublicIntro().catch(err => {
-            console.warn('Failed to fetch intro:', err);
             return { text: '' };
           }),
           fetchPublicImages().catch(err => {
-            console.warn('Failed to fetch images:', err);
             return [];
           })
         ]);
-        
-        // DEBUG: Log the API responses
-        console.log('🔍 Intro Response:', introResponse);
-        console.log('🔍 Images Response:', imagesResponse);
         
         // Set intro text
         if (introResponse && introResponse.text) {
@@ -57,27 +51,18 @@ const HomeSection = () => {
               fullUrl = `${API_BASE_URL}/${cleanUrl}`;
             }
             
-            console.log('🖼️ Transforming image:', {
-              original: img.url,
-              transformed: fullUrl,
-              caption: img.caption
-            });
-            
             return {
               url: fullUrl,
               caption: img.caption || 'Hindi Samiti Event'
             };
           });
           
-          console.log('✅ Final transformed images:', transformedImages);
           setImages(transformedImages);
         } else {
-          console.log('⚠️ No images from API, using defaults');
           setImages([]);
         }
         
       } catch (err) {
-        console.error('❌ Error loading homepage data:', err);
         setError('Failed to load homepage content');
         // Use defaults on error
         setIntroText(defaultIntro);
@@ -89,15 +74,6 @@ const HomeSection = () => {
 
     loadData();
   }, []);
-
-  // DEBUG: Log current state
-  console.log('🏠 HomeSection State:', {
-    loading,
-    error,
-    introText: introText.substring(0, 50) + '...',
-    imagesCount: images.length,
-    images: images.map(img => ({ url: img.url, caption: img.caption }))
-  });
 
   if (loading) {
     return (
@@ -114,11 +90,6 @@ const HomeSection = () => {
 
   return (
     <section id="home" className="relative min-h-screen">
-      {/* DEBUG: Show current image count */}
-      <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-2 rounded z-50">
-        Images: {images.length} | Intro: {introText ? 'Custom' : 'Default'}
-      </div>
-      
       {/* Background carousel */}
       <ImageCarousel images={images} />
       
@@ -164,13 +135,6 @@ const HomeSection = () => {
           </motion.div>
         </motion.div>
       </div>
-      
-      {/* Error message (if any) */}
-      {error && (
-        <div className="absolute top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md z-50">
-          {error}
-        </div>
-      )}
       
       {/* Scroll indicator */}
       <motion.div 

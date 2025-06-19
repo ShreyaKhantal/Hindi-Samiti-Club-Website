@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { FaArrowRight } from 'react-icons/fa';
 import EventCard from '../components/EventCard';
 import { fetchPublicEvents } from '../utils/api'; // Use public API
@@ -9,6 +9,7 @@ const EventsSection = () => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -26,6 +27,13 @@ const EventsSection = () => {
 
     fetchEvents();
   }, []);
+
+  // Handle event click from home page
+  const handleEventClick = (eventId) => {
+    navigate(`/events/${eventId}`, { 
+      state: { from: 'home' } 
+    });
+  };
 
   // Sample events for fallback if API fails
   const sampleEvents = [
@@ -102,7 +110,10 @@ const EventsSection = () => {
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                 >
-                  <EventCard event={event} />
+                  <EventCard 
+                    event={event} 
+                    onClick={() => handleEventClick(event.id)}
+                  />
                 </motion.div>
               ))}
             </div>

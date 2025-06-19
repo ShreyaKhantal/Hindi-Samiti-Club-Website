@@ -1,6 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { FaInstagram, FaFacebook, FaTwitter, FaEnvelope, FaPhone } from 'react-icons/fa';
+import React, { useEffect } from 'react';
 
 // Inline styles object
 const styles = {
@@ -56,22 +54,12 @@ const styles = {
   },
   contactContent: {
     display: 'flex',
-    flexWrap: 'wrap',
-    gap: '40px',
+    justifyContent: 'center',
     marginBottom: '60px',
   },
-  contactFormContainer: {
-    flex: 1,
-    minWidth: '300px',
-    backgroundColor: '#fff',
-    padding: '30px',
-    borderRadius: '8px',
-    boxShadow: '0 5px 20px rgba(0, 0, 0, 0.05)',
-    border: '1px solid #f8e3cb',
-  },
   contactInfoContainer: {
-    flex: 1,
-    minWidth: '300px',
+    maxWidth: '500px',
+    width: '100%',
     backgroundColor: '#fff',
     padding: '30px',
     borderRadius: '8px',
@@ -84,64 +72,6 @@ const styles = {
     color: '#d9531e',
     fontFamily: '"Poppins", sans-serif',
     textAlign: 'center',
-  },
-  formGroup: {
-    marginBottom: '20px',
-  },
-  label: {
-    display: 'block',
-    marginBottom: '8px',
-    fontWeight: '500',
-    color: '#8b2f00',
-  },
-  input: {
-    width: '100%',
-    padding: '12px 15px',
-    border: '1px solid #f0d4b4',
-    borderRadius: '4px',
-    fontSize: '16px',
-    transition: 'border-color 0.3s',
-    outline: 'none',
-  },
-  textarea: {
-    width: '100%',
-    padding: '12px 15px',
-    border: '1px solid #f0d4b4',
-    borderRadius: '4px',
-    fontSize: '16px',
-    transition: 'border-color 0.3s',
-    outline: 'none',
-    resize: 'vertical',
-  },
-  submitButton: {
-    backgroundColor: '#d9531e',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    padding: '12px 25px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    transition: 'background-color 0.3s',
-    fontWeight: '500',
-    display: 'block',
-    margin: '0 auto',
-  },
-  submitButtonHover: {
-    backgroundColor: '#b83d10',
-  },
-  formStatus: {
-    marginTop: '15px',
-    padding: '10px',
-    borderRadius: '4px',
-    textAlign: 'center',
-  },
-  success: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    color: '#2e7d32',
-  },
-  error: {
-    backgroundColor: 'rgba(244, 67, 54, 0.2)',
-    color: '#c62828',
   },
   loadingSpinner: {
     width: '40px',
@@ -191,6 +121,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     marginBottom: '15px',
+    justifyContent: 'center',
   },
   contactIcon: {
     fontSize: '20px',
@@ -219,14 +150,9 @@ const styles = {
     opacity: '0.6',
   },
   '@media (max-width: 768px)': {
-    contactContent: {
-      flexDirection: 'column',
-    },
-    contactFormContainer: {
-      width: '100%',
-    },
     contactInfoContainer: {
       width: '100%',
+      margin: '0 20px',
     },
     sectionTitle: {
       fontSize: '2.2rem',
@@ -244,15 +170,6 @@ const addKeyframesToDocument = () => {
         to { transform: rotate(360deg); }
       }
       
-      input:focus, textarea:focus {
-        border-color: #d9531e;
-        box-shadow: 0 0 0 2px rgba(217, 83, 30, 0.2);
-      }
-      
-      .submit-button:hover {
-        background-color: #b83d10;
-      }
-      
       .social-icon:hover {
         color: #f49d37;
         transform: translateY(-5px);
@@ -268,255 +185,16 @@ const addKeyframesToDocument = () => {
 };
 
 const ContactSection = () => {
-  const [contactInfo, setContactInfo] = useState({
-    instagram: '',
-    facebook: '',
-    twitter: '',
-    email: '',
-    phone: ''
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    message: ''
-  });
-  const [formStatus, setFormStatus] = useState(null);
-  const [hoveredButton, setHoveredButton] = useState(false);
-
   useEffect(() => {
     // Add keyframes styles for animations
     addKeyframesToDocument();
-    
-    const fetchContactInfo = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get('/api/contact-info');
-        setContactInfo(response.data);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching contact information:', err);
-        setError('Failed to load contact information. Please try again later.');
-        setLoading(false);
-      }
-    };
-
-    fetchContactInfo();
   }, []);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    try {
-      setFormStatus('sending');
-      // Note: This would be an actual API endpoint in production
-      await axios.post('/api/contact-message', formData);
-      setFormStatus('success');
-      setFormData({ name: '', email: '', message: '' });
-      
-      // Reset form status after 3 seconds
-      setTimeout(() => {
-        setFormStatus(null);
-      }, 3000);
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setFormStatus('error');
-      
-      // Reset form status after 3 seconds
-      setTimeout(() => {
-        setFormStatus(null);
-      }, 3000);
-    }
-  };
-
-  const renderSocialIcon = (platform, url) => {
-    if (!url) return null;
-
-    let Icon;
-    switch (platform) {
-      case 'instagram':
-        Icon = FaInstagram;
-        break;
-      case 'facebook':
-        Icon = FaFacebook;
-        break;
-      case 'twitter':
-        Icon = FaTwitter;
-        break;
-      case 'email':
-        Icon = FaEnvelope;
-        break;
-      case 'phone':
-        Icon = FaPhone;
-        break;
-      default:
-        return null;
-    }
-
-    let href = url;
-    if (platform === 'email' && !url.startsWith('mailto:')) {
-      href = `mailto:${url}`;
-    } else if (platform === 'phone' && !url.startsWith('tel:')) {
-      href = `tel:${url}`;
-    } else if (!url.startsWith('http://') && !url.startsWith('https://') && platform !== 'email' && platform !== 'phone') {
-      href = `https://${url}`;
-    }
-
-    return (
-      <a 
-        href={href} 
-        target={platform !== 'email' && platform !== 'phone' ? '_blank' : ''} 
-        rel="noopener noreferrer"
-        className="social-icon"
-        aria-label={platform}
-        style={styles.socialIcon}
-      >
-        <Icon />
-      </a>
-    );
-  };
 
   return (
     <section id="contact" style={styles.contactSection}>
       <div style={styles.culturalBorderTop}></div>
       <div style={styles.container}>
-        <h2 style={styles.sectionTitle}>
-          Get In Touch
-          <div style={styles.titleDecoration}></div>
-        </h2>
-        
-        <div style={styles.contactContent}>
-          <div style={styles.contactFormContainer}>
-            <h3 style={styles.heading}>Send Us A Message</h3>
-            <form onSubmit={handleSubmit}>
-              <div style={styles.formGroup}>
-                <label htmlFor="name" style={styles.label}>Name</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  style={styles.input}
-                />
-              </div>
-              
-              <div style={styles.formGroup}>
-                <label htmlFor="email" style={styles.label}>Email</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                  style={styles.input}
-                />
-              </div>
-              
-              <div style={styles.formGroup}>
-                <label htmlFor="message" style={styles.label}>Message</label>
-                <textarea
-                  id="message"
-                  name="message"
-                  rows="5"
-                  value={formData.message}
-                  onChange={handleInputChange}
-                  required
-                  style={styles.textarea}
-                ></textarea>
-              </div>
-              
-              <button 
-                type="submit" 
-                className="submit-button"
-                disabled={formStatus === 'sending'}
-                style={{
-                  ...styles.submitButton,
-                  ...(hoveredButton ? styles.submitButtonHover : {})
-                }}
-                onMouseEnter={() => setHoveredButton(true)}
-                onMouseLeave={() => setHoveredButton(false)}
-              >
-                {formStatus === 'sending' ? 'Sending...' : 'Send Message'}
-              </button>
-              
-              {formStatus === 'success' && (
-                <div style={{...styles.formStatus, ...styles.success}}>
-                  Message sent successfully!
-                </div>
-              )}
-              
-              {formStatus === 'error' && (
-                <div style={{...styles.formStatus, ...styles.error}}>
-                  Failed to send message. Please try again.
-                </div>
-              )}
-            </form>
-          </div>
-          
-          <div style={styles.contactInfoContainer}>
-            <h3 style={styles.heading}>Connect With Us</h3>
-            {loading ? (
-              <div style={styles.loadingSpinner}></div>
-            ) : error ? (
-              <div style={styles.errorMessage}>{error}</div>
-            ) : (
-              <div style={styles.contactDetails}>
-                <div style={styles.socialMedia}>
-                  {(contactInfo.instagram || contactInfo.facebook || contactInfo.twitter) && (
-                    <div>
-                      <h4 style={styles.heading4}>Follow Us</h4>
-                      <div style={styles.socialIcons}>
-                        {renderSocialIcon('instagram', contactInfo.instagram)}
-                        {renderSocialIcon('facebook', contactInfo.facebook)}
-                        {renderSocialIcon('twitter', contactInfo.twitter)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
-                {(contactInfo.email || contactInfo.phone) && (
-                  <div style={styles.directContact}>
-                    <h4 style={styles.heading4}>Contact Us</h4>
-                    {contactInfo.email && (
-                      <div style={styles.contactItem}>
-                        <FaEnvelope style={styles.contactIcon} />
-                        <a 
-                          href={`mailto:${contactInfo.email}`} 
-                          className="contact-link"
-                          style={styles.contactLink}
-                        >
-                          {contactInfo.email}
-                        </a>
-                      </div>
-                    )}
-                    
-                    {contactInfo.phone && (
-                      <div style={styles.contactItem}>
-                        <FaPhone style={styles.contactIcon} />
-                        <a 
-                          href={`tel:${contactInfo.phone}`}
-                          className="contact-link"
-                          style={styles.contactLink}
-                        >
-                          {contactInfo.phone}
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+
         
         <div style={styles.locationInfo}>
           <h3 style={styles.heading}>Find Us</h3>
