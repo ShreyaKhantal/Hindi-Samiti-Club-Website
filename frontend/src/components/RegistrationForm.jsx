@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaCloudUploadAlt, FaCheck, FaSpinner } from 'react-icons/fa';
 import api from '../utils/api';
+import qrCode from '../assets/qr.png';
 
 const RegistrationForm = ({ event, onSubmit }) => {
   const [email, setEmail] = useState('');
@@ -389,7 +390,19 @@ const RegistrationForm = ({ event, onSubmit }) => {
                   )}
                 </div>
               ))}
-              
+              {/* QR Code Display */}
+              <div className="mb-6 text-center">
+                <h3 className="text-lg font-semibold text-orange-800 mb-2">Scan & Pay</h3>
+                <div className="inline-block p-3 bg-white rounded-xl shadow-lg border border-orange-200">
+                  <img
+                    src={qrCode}
+                    alt="QR Code for Payment"
+                    className="w-40 h-40 object-contain mx-auto rounded"
+                  />
+                  <p className="text-sm text-orange-600 mt-2">Scan this code to pay</p>
+                </div>
+              </div>
+
               <div className="mb-6">
                 <label className="block text-orange-800 font-medium mb-1">
                   Payment Screenshot <span className="text-red-500">*</span>
