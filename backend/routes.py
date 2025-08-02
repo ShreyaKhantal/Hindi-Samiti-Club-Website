@@ -34,6 +34,23 @@ route = Blueprint('main', __name__)
 # Allowed file extensions for image uploads
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+# Enable CORS for all routes including static files
+def configure_cors(app):
+    """Configure CORS for the Flask app"""
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        },
+        r"/uploads/*": {
+            "origins": "*",
+            "methods": ["GET"],
+            "allow_headers": ["Content-Type"]
+        }
+    })
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -557,6 +574,45 @@ def update_registration_status(current_admin, registration_id):
 
 # ==================== ADMIN TEAM ROUTES ====================
 
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+# Add this new route for team member image upload
+@route.route('/api/admin/team/upload-image', methods=['POST'])
+@token_required
+def upload_team_member_image(current_admin):
+    try:
+        if 'image' not in request.files:
+            return jsonify({'message': 'No image file provided'}), 400
+        
+        file = request.files['image']
+        
+        if file.filename == '':
+            return jsonify({'message': 'No file selected'}), 400
+        
+        if file and allowed_file(file.filename):
+            # Create team members upload directory
+            team_upload_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'uploads'), 'team_members')
+            os.makedirs(team_upload_folder, exist_ok=True)
+            
+            # Generate unique filename
+            filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
+            filepath = os.path.join(team_upload_folder, filename)
+            file.save(filepath)
+            
+            # Return the image URL
+            image_url = f'/uploads/team_members/{filename}'
+            
+            return jsonify({
+                'success': True,
+                'image_url': image_url,
+                'filename': filename
+            }), 200
+        else:
+            return jsonify({'message': 'Invalid file type. Only PNG, JPG, JPEG, GIF, and WEBP files are allowed'}), 400
+            
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+
 @route.route('/api/admin/team', methods=['GET'])
 @token_required
 def get_team_members(current_admin):
@@ -627,6 +683,15 @@ def update_team_member(current_admin, member_id):
 def delete_team_member(current_admin, member_id):
     try:
         member = TeamMember.query.get_or_404(member_id)
+        
+        # Delete associated image file if it exists
+        if member.image_url and member.image_url.startswith('/uploads/team_members/'):
+            filename = os.path.basename(member.image_url)
+            team_upload_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'uploads'), 'team_members')
+            filepath = os.path.join(team_upload_folder, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        
         db.session.delete(member)
         db.session.commit()
         
@@ -635,6 +700,115 @@ def delete_team_member(current_admin, member_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': str(e)}), 500
+
+# Add route to serve team member images
+@route.route('/uploads/team_members/<filename>')
+def uploaded_team_member_file(filename):
+    """Serve team member images"""
+    try:
+        team_upload_folder = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'uploads'), 'team_members')
+        
+        # Security check - ensure filename doesn't contain path traversal
+        if '..' in filename or '/' in filename or '\\' in filename:
+            abort(404)
+            
+        file_path = os.path.join(team_upload_folder, filename)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            print(f"Team member image not found: {file_path}")  # Debug log
+            abort(404)
+            
+        # Determine MIME type
+        mimetype, _ = mimetypes.guess_type(file_path)
+        if not mimetype:
+            mimetype = 'image/png'  # Fallback
+            
+        response = send_file(file_path, mimetype=mimetype)
+        
+        # Add CORS headers for cross-origin requests
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error serving team member image {filename}: {str(e)}")
+        abort(404)
+
+@route.route('/uploads/team_members/<filename>')
+def serve_team_member_image(filename):
+    """Serve team member images with proper headers and error handling"""
+    try:
+        import os
+        from flask import current_app, send_file, abort
+        import mimetypes
+        
+        # Get the upload folder path
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        team_members_folder = os.path.join(upload_folder, 'team_members')
+        
+        # Security check - prevent directory traversal
+        if '..' in filename or '/' in filename or '\\' in filename:
+            print(f"Security: Blocked access to {filename}")
+            abort(404)
+        
+        # Construct full file path
+        file_path = os.path.join(team_members_folder, filename)
+        
+        print(f"🔍 Attempting to serve team member image:")
+        print(f"   Filename: {filename}")
+        print(f"   Full path: {file_path}")
+        print(f"   File exists: {os.path.exists(file_path)}")
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            print(f"❌ File not found: {file_path}")
+            # List available files for debugging
+            if os.path.exists(team_members_folder):
+                available_files = os.listdir(team_members_folder)
+                print(f"📁 Available files: {available_files}")
+            else:
+                print(f"📁 Directory doesn't exist: {team_members_folder}")
+            abort(404)
+        
+        # Get file info
+        file_size = os.path.getsize(file_path)
+        print(f"📦 File size: {file_size} bytes")
+        
+        # Determine MIME type
+        mimetype, _ = mimetypes.guess_type(file_path)
+        if not mimetype:
+            # Default to image/jpeg for unknown types
+            mimetype = 'image/jpeg'
+        
+        print(f"🎯 MIME type: {mimetype}")
+        
+        # Create response
+        response = send_file(
+            file_path, 
+            mimetype=mimetype,
+            as_attachment=False,  # Display inline, not download
+            conditional=True  # Enable HTTP caching
+        )
+        
+        # Add CORS headers to allow cross-origin requests
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        
+        # Add caching headers
+        response.headers['Cache-Control'] = 'public, max-age=3600'  # Cache for 1 hour
+        
+        print(f"✅ Successfully serving: {filename}")
+        return response
+        
+    except Exception as e:
+        print(f"❌ Error serving team member image {filename}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        abort(500)        
 
 # ==================== UTILITY ROUTES ====================
 

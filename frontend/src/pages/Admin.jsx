@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { fetchIntro, updateIntro, fetchImages, uploadImage, deleteImage, 
          fetchEvents, createEvent, updateEvent, deleteEvent, 
          fetchRegistrations, updateRegistrationStatus, downloadRegistrationsExcel,
-         fetchTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember,
+         fetchTeamMembers, fetchPublicTeamMembers, createTeamMember, updateTeamMember, deleteTeamMember,
          viewScreenshot } from '../utils/api';
 import { checkAuth, logout } from '../utils/auth';
+
+
+
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -872,13 +875,16 @@ const EventsSection = () => {
 };
 
 
-// Team Management Section
+// Updated Team Management Section for Admin
 const TeamSection = () => {
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState({ text: '', type: '' });
   const [showForm, setShowForm] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   
   // Form fields for team member
   const [memberForm, setMemberForm] = useState({
@@ -895,10 +901,16 @@ const TeamSection = () => {
   const loadTeamMembers = async () => {
     try {
       setIsLoading(true);
-      const data = await fetchTeamMembers();
+      console.log('🔄 ADMIN: Loading team members...');
+      
+      // Use the ADMIN function, not the public one
+      const data = await fetchTeamMembers(); // This is the admin API function
+      
+      console.log('✅ ADMIN: Team members loaded:', data);
       setTeamMembers(data);
     } catch (error) {
-      setMessage({ text: 'Failed to load team members', type: 'error' });
+      console.error('❌ ADMIN: Error loading team members:', error);
+      setMessage({ text: 'Failed to load team members: ' + error.message, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -912,6 +924,8 @@ const TeamSection = () => {
       image_url: member.image_url || '',
       description: member.description || ''
     });
+    setImagePreview(member.image_url || '');
+    setImageFile(null);
     setShowForm(true);
   };
   
@@ -923,6 +937,8 @@ const TeamSection = () => {
       image_url: '',
       description: ''
     });
+    setImagePreview('');
+    setImageFile(null);
     setShowForm(true);
   };
   
@@ -934,17 +950,72 @@ const TeamSection = () => {
     });
   };
   
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const uploadImage = async () => {
+    if (!imageFile) return null;
+    
+    try {
+      setIsUploadingImage(true);
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      
+      const response = await fetch('/api/admin/team/upload-image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to upload image');
+      }
+      
+      const result = await response.json();
+      return result.image_url;
+    } catch (error) {
+      throw new Error('Failed to upload image: ' + error.message);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
+      let finalImageUrl = memberForm.image_url;
+      
+      // Upload new image if selected
+      if (imageFile) {
+        finalImageUrl = await uploadImage();
+      }
+      
+      const finalMemberForm = {
+        ...memberForm,
+        image_url: finalImageUrl
+      };
+      
       if (selectedMember) {
         // Update existing team member
-        await updateTeamMember(selectedMember.id, memberForm);
+        await updateTeamMember(selectedMember.id, finalMemberForm);
         setMessage({ text: 'Team member updated successfully', type: 'success' });
       } else {
         // Create new team member
-        await createTeamMember(memberForm);
+        await createTeamMember(finalMemberForm);
         setMessage({ text: 'Team member added successfully', type: 'success' });
       }
       
@@ -974,7 +1045,7 @@ const TeamSection = () => {
     }
   };
   
-  if (isLoading && teamMembers.length === 0) {
+  if (isLoading) {
     return <div className="text-center py-10">Loading team members...</div>;
   }
   
@@ -996,12 +1067,84 @@ const TeamSection = () => {
         </div>
       )}
       
+      {/* Debug Panel */}
+      <div className="bg-blue-100 border border-blue-300 rounded-lg p-4">
+        <h3 className="font-semibold mb-2">🛠️ Admin Team Debug Info:</h3>
+        <div className="text-sm">
+          <p>• Total members loaded: {teamMembers.length}</p>
+          <p>• Members with images: {teamMembers.filter(m => m.image_url).length}</p>
+          <p>• Members without images: {teamMembers.filter(m => !m.image_url).length}</p>
+          <details className="mt-2">
+            <summary className="cursor-pointer">Raw API Data</summary>
+            <pre className="mt-2 bg-white p-2 rounded text-xs overflow-auto max-h-40">
+              {JSON.stringify(teamMembers, null, 2)}
+            </pre>
+          </details>
+        </div>
+      </div>
+      
       {showForm ? (
         <div className="bg-white p-6 rounded-lg shadow-md">
           <form onSubmit={handleSubmit} className="space-y-6">
             <h3 className="text-xl font-semibold border-b pb-2">
               {selectedMember ? 'Edit Team Member' : 'Add New Team Member'}
             </h3>
+            
+            {/* Image Upload Section */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Profile Image
+              </label>
+              
+              {/* Image Preview */}
+              <div className="mb-4">
+                {imagePreview ? (
+                  <div className="relative w-32 h-32 mx-auto">
+                    <img 
+                      src={imagePreview} 
+                      alt="Preview" 
+                      className="w-full h-full object-cover rounded-full border-4 border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview('');
+                        setImageFile(null);
+                        setMemberForm({ ...memberForm, image_url: '' });
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 mx-auto bg-gray-200 rounded-full flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              
+              {/* File Input */}
+              <div className="flex items-center justify-center">
+                <label className="cursor-pointer bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-md border border-indigo-300">
+                  <span>{imageFile ? 'Change Image' : 'Select Image'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              
+              {imageFile && (
+                <p className="text-sm text-gray-600 mt-2 text-center">
+                  Selected: {imageFile.name}
+                </p>
+              )}
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -1014,7 +1157,7 @@ const TeamSection = () => {
                   value={memberForm.name}
                   onChange={handleInputChange}
                   required
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
               
@@ -1028,24 +1171,10 @@ const TeamSection = () => {
                   value={memberForm.role}
                   onChange={handleInputChange}
                   required
-                  className="w-full p-2 border rounded-md"
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   placeholder="e.g. President, Designer, Faculty Coordinator"
                 />
               </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Profile Image URL
-              </label>
-              <input
-                type="text"
-                name="image_url"
-                value={memberForm.image_url}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md"
-                placeholder="https://example.com/image.jpg"
-              />
             </div>
             
             <div>
@@ -1057,7 +1186,7 @@ const TeamSection = () => {
                 value={memberForm.description}
                 onChange={handleInputChange}
                 rows="4"
-                className="w-full p-2 border rounded-md"
+                className="w-full p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 placeholder="Brief description or bio of the team member"
               ></textarea>
             </div>
@@ -1084,9 +1213,10 @@ const TeamSection = () => {
               
               <button
                 type="submit"
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md"
+                disabled={isUploadingImage}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {selectedMember ? 'Update' : 'Add Member'}
+                {isUploadingImage ? 'Uploading...' : (selectedMember ? 'Update Member' : 'Add Member')}
               </button>
             </div>
           </form>
@@ -1106,15 +1236,18 @@ const TeamSection = () => {
                       src={member.image_url} 
                       alt={member.name} 
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
                     />
-                  ) : (
-                    <div className="text-gray-400 flex flex-col items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      <p className="mt-2">No Image</p>
-                    </div>
-                  )}
+                  ) : null}
+                  <div className="text-gray-400 flex flex-col items-center" style={{ display: member.image_url ? 'none' : 'flex' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <p className="mt-2">No Image</p>
+                  </div>
                 </div>
                 <div className="p-4">
                   <h3 className="text-lg font-medium text-gray-900">{member.name}</h3>

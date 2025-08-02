@@ -10,7 +10,7 @@ const HomeSection = () => {
   const [error, setError] = useState(null);
   
   // Default intro text if none is provided
-  const defaultIntro = "हिंदी समिति is the premier Hindi language and cultural club dedicated to promoting and celebrating the rich heritage of Indian culture through literature, art, and cultural events. Join us in our mission to foster appreciation for Hindi language and Indian traditions.";
+  const defaultIntro = "हिन्दी समिति is the premier Hindi language and cultural club dedicated to promoting and celebrating the rich heritage of Indian culture through literature, art, and cultural events. Join us in our mission to foster appreciation for Hindi language and Indian traditions.";
 
   useEffect(() => {
     const loadData = async () => {
@@ -53,7 +53,7 @@ const HomeSection = () => {
             
             return {
               url: fullUrl,
-              caption: img.caption || 'Hindi Samiti Event'
+              caption: img.caption
             };
           });
           
@@ -102,7 +102,7 @@ const HomeSection = () => {
           className="text-center max-w-4xl"
         >
           <h1 className="text-6xl md:text-8xl font-bold text-yellow-300 mb-4 font-hindi">
-            हिंदी समिति
+            हिन्दी समिति
           </h1>
           
           <motion.div

@@ -83,7 +83,7 @@ const Navbar = () => {
         >
           <Link to="/" className="flex items-center">
             <img src={logo} alt="Hindi Samiti Logo" className="h-12 mr-3" />
-            <h1 className="text-xl font-bold text-yellow-300 hidden md:block">हिंदी समिति</h1>
+            <h1 className="text-xl font-bold text-yellow-300 hidden md:block">हिन्दी समिति</h1>
           </Link>
         </motion.div>
 

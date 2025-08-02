@@ -22,7 +22,7 @@ const Footer = ({ contactInfo }) => {
             viewport={{ once: true }}
             className="flex flex-col items-center md:items-start"
           >
-            <h3 className="text-2xl font-bold mb-4 text-yellow-300">हिंदी समिति</h3>
+            <h3 className="text-2xl font-bold mb-4 text-yellow-300">हिन्दी समिति</h3>
             <p className="text-center md:text-left mb-4">
               Promoting and celebrating Indian culture and Hindi language through art, literature, and events.
             </p>
@@ -104,7 +104,7 @@ const Footer = ({ contactInfo }) => {
         </div>
 
         <div className="mt-8 pt-6 border-t border-orange-800 text-center">
-          <p>© {new Date().getFullYear()} हिंदी समिति. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} हिन्दी समिति. All rights reserved.</p>
         </div>
       </div>
     </footer>

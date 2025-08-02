@@ -197,9 +197,9 @@ const ContactSection = () => {
 
         
         <div style={styles.locationInfo}>
-          <h3 style={styles.heading}>Find Us</h3>
-          <p>Hindi Samiti, Cultural Club</p>
-          <p>Your College Name</p>
+          <h3 style={styles.heading}>संपर्क करें</h3>
+          <p>हिन्दी समिति, कल्चरल क्लब</p>
+          <p>माधव प्रौद्योगिकी  एवं विज्ञान संस्थान सम-विश्वविद्यालय (MITS-DU) , ग्वालियर (मध्यप्रदेश)</p>
           <div style={styles.culturalDecorationBottom}></div>
         </div>
       </div>
